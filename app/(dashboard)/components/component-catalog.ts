@@ -1,0 +1,46 @@
+export type ComponentType = {
+  slug: string;
+  title: string;
+  description: string;
+};
+
+export const COMPONENT_CATALOG: ComponentType[] = [
+  { slug: "buttons", title: "Buttons", description: "Action and CTA controls." },
+  { slug: "cards", title: "Cards", description: "Container and content grouping UI." },
+  { slug: "forms", title: "Form Controls", description: "Input, label, switch, and select patterns." },
+  { slug: "feedback", title: "Feedback", description: "Alerts, badges, and status indicators." },
+  { slug: "tables", title: "Tables", description: "Tabular data and structured content." },
+  { slug: "accordion", title: "Accordion", description: "Expandable and collapsible sections." },
+  { slug: "alert-dialog", title: "Alert Dialog", description: "Critical confirmation modals." },
+  { slug: "avatar", title: "Avatar", description: "User profile visuals and fallbacks." },
+  { slug: "breadcrumb", title: "Breadcrumb", description: "Hierarchical navigation paths." },
+  { slug: "calendar", title: "Calendar", description: "Date selection and scheduling UI." },
+  { slug: "carousel", title: "Carousel", description: "Sliding content and galleries." },
+  { slug: "chart", title: "Chart", description: "Data visualization wrappers." },
+  { slug: "checkbox", title: "Checkbox", description: "Boolean and multi-select options." },
+  { slug: "command", title: "Command", description: "Command palette and quick actions." },
+  { slug: "context-menu", title: "Context Menu", description: "Right-click contextual actions." },
+  { slug: "dialog", title: "Dialog", description: "General-purpose modal windows." },
+  { slug: "drawer", title: "Drawer", description: "Slide-in side/bottom panels." },
+  { slug: "dropdown-menu", title: "Dropdown Menu", description: "Menu triggers and action lists." },
+  { slug: "hover-card", title: "Hover Card", description: "Preview cards on hover." },
+  { slug: "input", title: "Input", description: "Single-line text inputs." },
+  { slug: "input-otp", title: "Input OTP", description: "One-time-password segmented input." },
+  { slug: "menubar", title: "Menubar", description: "Top-level application menus." },
+  { slug: "navigation-menu", title: "Navigation Menu", description: "Complex navigation blocks." },
+  { slug: "pagination", title: "Pagination", description: "Paged navigation controls." },
+  { slug: "popover", title: "Popover", description: "Floating contextual overlays." },
+  { slug: "progress", title: "Progress", description: "Progress indicators and loaders." },
+  { slug: "radio-group", title: "Radio Group", description: "Single-choice option sets." },
+  { slug: "scroll-area", title: "Scroll Area", description: "Styled scroll containers." },
+  { slug: "sheet", title: "Sheet", description: "Off-canvas interaction panels." },
+  { slug: "sidebar", title: "Sidebar", description: "Navigation and layout shell components." },
+  { slug: "skeleton", title: "Skeleton", description: "Loading placeholders." },
+  { slug: "slider", title: "Slider", description: "Range and value controls." },
+  { slug: "switch", title: "Switch", description: "On/off toggles." },
+  { slug: "tabs", title: "Tabs", description: "Tabbed content switching." },
+  { slug: "textarea", title: "Textarea", description: "Multi-line text inputs." },
+  { slug: "toggle", title: "Toggle", description: "Stateful button toggles." },
+  { slug: "toggle-group", title: "Toggle Group", description: "Grouped toggle controls." },
+  { slug: "tooltip", title: "Tooltip", description: "Hover/focus helper text." },
+];

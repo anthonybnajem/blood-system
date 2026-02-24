@@ -1,0 +1,26 @@
+Title: Electron + Local Sync Architecture plan
+
+1. Shell: React + Electron ("Reactron")
+   - Wrap the existing Next/React UI in an Electron shell (electron-builder or forge) so we can access Node APIs (printing, filesystem, auto updates).
+   - Recommended approach: run Next in production build (`next start`) inside the Electron main process, or export the UI (next export + static server) if you want an entirely offline bundle.
+   - Use preload scripts and contextIsolation to expose only the APIs we need (printing, receipt export, filesystem, sync triggers) to the React frontend.
+
+2. Local Database on Windows
+   - Current Dexie/IndexedDB is browser-oriented. You can still adopt SQLite as described above, **or** run Microsoft SQL Server Express (or full SQL Server) on a dedicated PC that acts as a LAN host. That keeps everything on-premises with no cloud servers.
+   - If you go with SQL Server: install Express on the host PC, enable TCP/IP (or Hamachi adapter), and let each Electron client connect via the LAN IP. This gives you SQL tooling and stored procedures if needed.
+   - SQLite remains attractive for single-PC deployments, but SQL Server on a dedicated machine works fine when you already have Windows admin control and want multi-seat access with built-in replication options.
+
+3. Hamachi-powered Multi-site Sync
+   - Each store PC runs the Electron app with its own local SQLite DB. For multi-branch sync, a Node-based service can listen for change events (sale recorded, product updated) and push/pull diffs over HTTPS through Hamachi’s virtual LAN.
+   - Conflict resolution: use timestamps/version columns per table (last-write-wins) or vector clocks if you need per-branch precedence. Keep a sync queue table inside SQLite so offline edits are replayed when the Hamachi link is up.
+   - Security: Hamachi tunnels are encrypted but still authenticate API calls with signed tokens. Optionally add a central “hub” PC/server that merges incoming changes before rebroadcasting.
+
+4. TXT Reporting
+   - Within Electron we can use Node’s filesystem module to generate plain text files (shift reports, daily summaries). The workflow: query SQLite with the date range, format the output (tabular plain text), and write to `~/Documents/CarnicoReports/<report>.txt`.
+   - The browser build can still create text exports by generating a Blob; Electron simply adds the ability to drop files without user interaction.
+
+Summary
+   - Electron gives us a secure desktop shell with Node APIs.
+   - SQLite fits the offline-first story better than SQL Server: tiny footprint, portable, no services or admin installs, and easy replication.
+   - Hamachi sync + Node watcher replicates data across branches while preserving the offline experience (fast local writes, eventual consistency).
+   - Text reports are straightforward once we control the filesystem through Electron.
