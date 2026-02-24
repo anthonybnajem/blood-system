@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
 
 export default function SignInPage() {
@@ -36,32 +37,10 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const { employeesApi } = await import("@/lib/db");
-      const { verifyPassword } = await import("@/lib/auth-utils");
-
-      const employees = await employeesApi.getAll();
-      const employee = employees.find((user) => user.email === email && user.isActive);
-
-      if (!employee || !employee.password) {
-        setError("Invalid email or password");
-        setIsLoading(false);
-        return;
-      }
-
-      const isValid = await verifyPassword(password, employee.password);
-      if (!isValid) {
-        setError("Invalid email or password");
-        setIsLoading(false);
-        return;
-      }
-
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
-        employeeId: employee.id,
-        employeeRole: employee.role,
-        employeeName: employee.name,
       });
 
       if (result?.error) {
@@ -80,6 +59,9 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md border-2 shadow-lg">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Sign In</CardTitle>

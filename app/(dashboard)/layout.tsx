@@ -9,6 +9,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,9 @@ export default function DashboardLayout({
           <header className="glass mx-4 mt-4 flex h-14 shrink-0 items-center gap-2 rounded-2xl px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </header>
           <div className="flex flex-1 flex-col gap-4 p-4 md:p-8">
             <div className="w-full min-w-0">{children}</div>

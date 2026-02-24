@@ -9,6 +9,8 @@ import {
   Blocks,
   Settings,
   LayoutTemplate,
+  FlaskConical,
+  ClipboardCheck,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -46,6 +48,8 @@ interface NavItem {
 
 const navMain: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/lab-entry", label: "Lab Entry", icon: ClipboardCheck },
+  { href: "/lab-config", label: "Lab Config", icon: FlaskConical, roles: ["admin", "manager"] },
   { href: "/components", label: "Components", icon: Blocks },
   { href: "/employees", label: "Users", icon: Users, roles: ["admin", "manager"] },
 ];

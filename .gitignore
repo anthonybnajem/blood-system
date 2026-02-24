@@ -27,3 +27,10 @@ yarn-error.log*
 next-env.d.ts
 
 *.DS_Store
+
+# local sqlite
+data/*.sqlite
+data/*.db
+
+# sqlite restore snapshots
+data/*.bak

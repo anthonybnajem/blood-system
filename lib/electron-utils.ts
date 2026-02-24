@@ -1,65 +1,95 @@
 // Utility functions for Electron compatibility
 
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron: () => Promise<boolean>;
+      getVersion: () => Promise<string>;
+      openExternal: (url: string) => Promise<boolean>;
+    };
+  }
+}
+
 // Check if running in Electron environment
 export const isElectron = (): boolean => {
-  // In a real Electron app, we would check for the Electron runtime
-  // For this mock, we'll just check the user agent
-  if (typeof window !== "undefined" && typeof navigator !== "undefined") {
-    return navigator.userAgent.toLowerCase().indexOf(" electron/") > -1
+  if (typeof window === "undefined") return false;
+  if (typeof window.electronAPI !== "undefined") return true;
+  if (typeof navigator !== "undefined") {
+    return navigator.userAgent.toLowerCase().includes(" electron/");
   }
-  return false
-}
+  return false;
+};
 
 // Generate a unique device ID for license activation
 export const getDeviceId = (): string => {
-  // In a real Electron app, we would use hardware identifiers
-  // For this mock, we'll use localStorage
   if (typeof window !== "undefined" && window.localStorage) {
-    let deviceId = localStorage.getItem("pos_device_id")
+    let deviceId = localStorage.getItem("pos_device_id");
     if (!deviceId) {
-      deviceId = `DEVICE-${Math.random().toString(36).substring(2, 15)}-${Math.random().toString(36).substring(2, 15)}`
-      localStorage.setItem("pos_device_id", deviceId)
+      deviceId = `DEVICE-${Math.random().toString(36).substring(2, 15)}-${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem("pos_device_id", deviceId);
     }
-    return deviceId
+    return deviceId;
   }
-  return "unknown-device"
-}
+  return "unknown-device";
+};
 
-// Get app version (would come from package.json in a real Electron app)
+// Get app version for UI display.
 export const getAppVersion = (): string => {
-  return "1.0.0"
-}
+  if (typeof window !== "undefined" && window.localStorage) {
+    const cachedVersion = window.localStorage.getItem("app_version");
+    if (cachedVersion) return cachedVersion;
+  }
+  return "1.0.0";
+};
+
+export const refreshAppVersion = async (): Promise<string> => {
+  if (typeof window === "undefined" || !window.electronAPI) {
+    return getAppVersion();
+  }
+
+  try {
+    const version = await window.electronAPI.getVersion();
+    window.localStorage.setItem("app_version", version);
+    return version;
+  } catch (error) {
+    console.error("Failed to read Electron app version:", error);
+    return getAppVersion();
+  }
+};
 
 // Check if app needs update
-export const checkForUpdates = async (): Promise<{ hasUpdate: boolean; version?: string }> => {
-  // In a real app, this would check against a server
-  // For this mock, we'll just return a simulated response
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  return { hasUpdate: false }
-}
+export const checkForUpdates = async (): Promise<{
+  hasUpdate: boolean;
+  version?: string;
+}> => {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return { hasUpdate: false };
+};
 
 // Simulate saving app settings to electron-store
 export const saveSettings = (settings: Record<string, any>): void => {
   if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.setItem("pos_app_settings", JSON.stringify(settings))
+    localStorage.setItem("pos_app_settings", JSON.stringify(settings));
   }
-}
+};
 
 // Simulate loading app settings from electron-store
 export const loadSettings = (): Record<string, any> => {
   if (typeof window !== "undefined" && window.localStorage) {
-    const settings = localStorage.getItem("pos_app_settings")
-    return settings ? JSON.parse(settings) : {}
+    const settings = localStorage.getItem("pos_app_settings");
+    return settings ? JSON.parse(settings) : {};
   }
-  return {}
-}
+  return {};
+};
 
 // Simulate opening external links in default browser
 export const openExternalLink = (url: string): void => {
-  if (isElectron()) {
-    console.log(`[Electron] Opening external link: ${url}`)
-    // In a real Electron app, we would use shell.openExternal
-  } else {
-    window.open(url, "_blank")
+  if (typeof window === "undefined") return;
+
+  if (window.electronAPI) {
+    void window.electronAPI.openExternal(url);
+    return;
   }
-}
+
+  window.open(url, "_blank");
+};

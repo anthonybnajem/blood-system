@@ -1,8 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
-import { getDB, employeesApi } from "./db";
 import { verifyPassword } from "./auth-utils";
+import { findEmployeeForAuthByEmail } from "./sqlite-auth";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true, // Required for NextAuth v5
@@ -26,9 +26,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        employeeId: { label: "Employee ID", type: "text" },
-        employeeRole: { label: "Employee Role", type: "text" },
-        employeeName: { label: "Employee Name", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -37,58 +34,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          // If employee data is passed from client-side validation, use it
-          // This avoids needing to access IndexedDB on the server
-          if (
-            credentials.employeeId &&
-            credentials.employeeRole &&
-            credentials.employeeName
-          ) {
-            return {
-              id: credentials.employeeId as string,
-              email: credentials.email as string,
-              name: credentials.employeeName as string,
-              role: credentials.employeeRole as string,
-            };
-          }
+          const employee = findEmployeeForAuthByEmail(
+            credentials.email as string
+          );
 
-          // Fallback: Try to access IndexedDB (will fail on server, but might work in some edge cases)
-          try {
-            const db = getDB();
-            const employees = await employeesApi.getAll();
-            const employee = employees.find(
-              (e) => e.email === credentials.email && e.isActive
-            );
-
-            if (!employee || !employee.password) {
-              console.error(
-                "Employee not found or no password:",
-                credentials.email
-              );
-              return null;
-            }
-
-            const isValid = await verifyPassword(
-              credentials.password as string,
-              employee.password
-            );
-
-            if (!isValid) {
-              console.error("Invalid password for:", credentials.email);
-              return null;
-            }
-
-            return {
-              id: employee.id,
-              email: employee.email,
-              name: employee.name,
-              role: employee.role,
-            };
-          } catch (dbError) {
-            // IndexedDB not available (server-side)
-            console.error("Cannot access IndexedDB:", dbError);
+          if (!employee || !employee.isActive) {
+            console.error("Employee not found or inactive:", credentials.email);
             return null;
           }
+
+          const isValid = await verifyPassword(
+            credentials.password as string,
+            employee.passwordHash
+          );
+
+          if (!isValid) {
+            console.error("Invalid password for:", credentials.email);
+            return null;
+          }
+
+          return {
+            id: employee.id,
+            email: employee.email,
+            name: employee.name,
+            role: employee.role,
+          };
         } catch (error) {
           console.error("Authentication error:", error);
           return null;

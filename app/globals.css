@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 html {
-  font-size: clamp(15px, 0.2vw + 14px, 18px);
+  font-size: clamp(14px, 0.12vw + 13.5px, 16px);
 }
 
 body {
@@ -51,7 +51,7 @@ body {
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.9rem;
+    --radius: 0.55rem;
     --sidebar-background: 210 42% 97%;
     --sidebar-foreground: 226 24% 20%;
     --sidebar-primary: 221 78% 56%;

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { employeesApi } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth-utils";
+import { findEmployeeForAuthByEmail } from "@/lib/sqlite-auth";
 
 /**
- * Client-side credentials authentication endpoint
- * This endpoint is called from the client to validate credentials
- * and then NextAuth handles the session creation
+ * Credentials authentication endpoint backed by SQLite.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -19,18 +17,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get employees from IndexedDB (this will be called from client-side)
-    // Note: This route should be called from client-side code that has access to IndexedDB
-    // For now, we'll return the employee data if found, and the client will handle session creation
+    const employee = findEmployeeForAuthByEmail(email);
+    if (!employee || !employee.isActive) {
+      return NextResponse.json(
+        { error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
 
-    // Actually, we can't access IndexedDB from server-side API routes
-    // We need to pass the employee data from the client
-    // Or use a different approach
+    const isValid = await verifyPassword(password, employee.passwordHash);
+    if (!isValid) {
+      return NextResponse.json(
+        { error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
 
-    return NextResponse.json(
-      { error: "This endpoint requires client-side IndexedDB access" },
-      { status: 501 }
-    );
+    return NextResponse.json({
+      id: employee.id,
+      name: employee.name,
+      email: employee.email,
+      role: employee.role,
+    });
   } catch (error: any) {
     console.error("Authentication error:", error);
     return NextResponse.json(

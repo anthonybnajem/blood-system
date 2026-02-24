@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { ComputerIcon as Desktop } from "lucide-react"
+import { isElectron as isElectronRuntime } from "@/lib/electron-utils"
 
 export function ElectronReadyIndicator() {
   const [isElectron, setIsElectron] = useState(false)
 
   useEffect(() => {
-    // Check if running in Electron
-    // In a real app, Electron would inject a userAgent or global variable
-    const userAgent = navigator.userAgent.toLowerCase()
-    setIsElectron(userAgent.indexOf(" electron/") > -1)
+    setIsElectron(isElectronRuntime())
   }, [])
 
   if (!isElectron) return null

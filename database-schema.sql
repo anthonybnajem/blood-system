@@ -1,0 +1,53 @@
+-- =====================================================
+-- LAB REPORTING DATABASE SCHEMA (Web + SQLite)
+-- Updated: 2026-02-24
+-- =====================================================
+
+-- =====================================================
+-- A) WEB DATABASE (IndexedDB via Dexie)
+-- Source: lib/lab-db.ts
+-- =====================================================
+
+-- DB Name: lab_reporting_db (Dexie version 1)
+--
+-- users:
+--   "userId, username, email, role, active, createdAt, updatedAt"
+--
+-- patients:
+--   "patientId, fullName, gender, dateOfBirth, phone, createdAt, updatedAt"
+--
+-- visits:
+--   "visitId, patientId, caseNo, status, visitDate, createdBy, verifiedBy, verifiedAt, printedAt, createdAt, updatedAt"
+--
+-- departments:
+--   "departmentId, name, ordering, active, createdAt, updatedAt"
+--
+-- panels:
+--   "panelId, departmentId, name, ordering, printIfEmpty, active, createdAt, updatedAt"
+--
+-- tests:
+--   "testId, panelId, testCode, resultType, printOrder, active, createdAt, updatedAt"
+--
+-- referenceRanges:
+--   "rangeId, testId, gender, ageMin, ageMax, createdAt, updatedAt"
+--
+-- results:
+--   "resultId, visitId, testId, enteredBy, enteredAt, updatedBy, updatedAt, abnormalFlag"
+--
+-- auditLog:
+--   "auditId, entityType, entityId, action, userId, timestamp"
+
+
+-- =====================================================
+-- B) SQLITE DATABASE (robust local/offline schema)
+-- Source of truth: sql/sqlite-schema.sql
+-- =====================================================
+--
+-- Includes:
+-- - employees (compat auth table used by current app)
+-- - users, patients, visits, departments, panels, tests,
+--   reference_ranges, results, audit_log (project.md model)
+-- - constraints, indexes, and updated_at triggers
+--
+-- Execute full SQLite schema with:
+--   sqlite3 data/app.sqlite < sql/sqlite-schema.sql
