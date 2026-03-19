@@ -50,6 +50,13 @@ type ReferenceRange = {
 
 type ReportSettings = {
   id: number;
+  reportHeaderImageUrl: string;
+  labName: string;
+  labAddress: string;
+  labPhone: string;
+  labEmail: string;
+  reportHeaderText: string;
+  reportFooterText: string;
   showLastResult: number;
   noRangePlaceholder: string;
   hideEmptyRows: number;
@@ -57,6 +64,9 @@ type ReportSettings = {
   hideEmptyDepartments: number;
   updatedAt: string;
 };
+
+const DEFAULT_REPORT_FOOTER_TEXT =
+  "Tripoli - Rue Maarad - Imm. Mir - Tel: 06 / 445 455 - 03 / 104 999 - Autorisation 677/1 - Email: labazamokaddem@hotmail.com - Results Website: www.labazamokaddem.online";
 
 const nowIso = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
@@ -258,6 +268,96 @@ function extractNormalBounds(rangeText: string | null): {
   return { normalLow: null, normalHigh: null };
 }
 
+function deleteTestWithDependencies(testId: string) {
+  const db = getSqliteDb();
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.prepare(`DELETE FROM results WHERE test_id = ?`).run(testId);
+    db.prepare(`DELETE FROM reference_ranges WHERE test_id = ?`).run(testId);
+    db.prepare(`DELETE FROM tests WHERE test_id = ?`).run(testId);
+    db.exec("COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function deletePanelWithDependencies(panelId: string) {
+  const db = getSqliteDb();
+  const resultCountRow = db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM results
+       WHERE test_id IN (SELECT test_id FROM tests WHERE panel_id = ?)`
+    )
+    .get(panelId) as { count: number };
+
+  if (resultCountRow.count > 0) {
+    throw new Error(
+      "Cannot delete this panel because seeded or saved patient results already reference its inputs."
+    );
+  }
+
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.prepare(
+      `DELETE FROM reference_ranges
+       WHERE test_id IN (SELECT test_id FROM tests WHERE panel_id = ?)`
+    ).run(panelId);
+    db.prepare(`DELETE FROM tests WHERE panel_id = ?`).run(panelId);
+    db.prepare(`DELETE FROM panels WHERE panel_id = ?`).run(panelId);
+    db.exec("COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function deleteDepartmentWithDependencies(departmentId: string) {
+  const db = getSqliteDb();
+  const resultCountRow = db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM results
+       WHERE test_id IN (
+         SELECT t.test_id
+         FROM tests t
+         INNER JOIN panels p ON p.panel_id = t.panel_id
+         WHERE p.department_id = ?
+       )`
+    )
+    .get(departmentId) as { count: number };
+
+  if (resultCountRow.count > 0) {
+    throw new Error(
+      "Cannot delete this category because seeded or saved patient results already reference its inputs."
+    );
+  }
+
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.prepare(
+      `DELETE FROM reference_ranges
+       WHERE test_id IN (
+         SELECT t.test_id
+         FROM tests t
+         INNER JOIN panels p ON p.panel_id = t.panel_id
+         WHERE p.department_id = ?
+       )`
+    ).run(departmentId);
+    db.prepare(
+      `DELETE FROM tests
+       WHERE panel_id IN (SELECT panel_id FROM panels WHERE department_id = ?)`
+    ).run(departmentId);
+    db.prepare(`DELETE FROM panels WHERE department_id = ?`).run(departmentId);
+    db.prepare(`DELETE FROM departments WHERE department_id = ?`).run(departmentId);
+    db.exec("COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
 export function getLabCatalog() {
   const db = getSqliteDb();
   const departments = db
@@ -327,6 +427,13 @@ export function getLabCatalog() {
     .prepare(
       `SELECT
         id,
+        report_header_image_url AS reportHeaderImageUrl,
+        lab_name AS labName,
+        lab_address AS labAddress,
+        lab_phone AS labPhone,
+        lab_email AS labEmail,
+        report_header_text AS reportHeaderText,
+        report_footer_text AS reportFooterText,
         show_last_result AS showLastResult,
         no_range_placeholder AS noRangePlaceholder,
         hide_empty_rows AS hideEmptyRows,
@@ -338,19 +445,32 @@ export function getLabCatalog() {
     )
     .get() as ReportSettings | undefined;
 
+  const resolvedReportSettings = reportSettings || {
+    id: 1,
+    reportHeaderImageUrl: "",
+    labName: "",
+    labAddress: "",
+    labPhone: "",
+    labEmail: "",
+    reportHeaderText: "",
+    reportFooterText: DEFAULT_REPORT_FOOTER_TEXT,
+    showLastResult: 1,
+    noRangePlaceholder: "—",
+    hideEmptyRows: 1,
+    hideEmptyPanels: 1,
+    hideEmptyDepartments: 1,
+    updatedAt: nowIso(),
+  };
+
   return {
     departments,
     panels,
     tests,
     ranges,
-    reportSettings: reportSettings || {
-      id: 1,
-      showLastResult: 1,
-      noRangePlaceholder: "—",
-      hideEmptyRows: 1,
-      hideEmptyPanels: 1,
-      hideEmptyDepartments: 1,
-      updatedAt: nowIso(),
+    reportSettings: {
+      ...resolvedReportSettings,
+      reportFooterText:
+        String(resolvedReportSettings.reportFooterText || "").trim() || DEFAULT_REPORT_FOOTER_TEXT,
     },
   };
 }
@@ -377,9 +497,7 @@ export function catalogAction(action: string, payload: any) {
       return { ok: true };
     }
     case "delete_department": {
-      db.prepare(`DELETE FROM departments WHERE department_id = ?`).run(
-        payload.departmentId
-      );
+      deleteDepartmentWithDependencies(payload.departmentId);
       return { ok: true };
     }
     case "create_panel": {
@@ -401,7 +519,7 @@ export function catalogAction(action: string, payload: any) {
       return { ok: true };
     }
     case "delete_panel": {
-      db.prepare(`DELETE FROM panels WHERE panel_id = ?`).run(payload.panelId);
+      deletePanelWithDependencies(payload.panelId);
       return { ok: true };
     }
     case "create_test": {
@@ -431,7 +549,7 @@ export function catalogAction(action: string, payload: any) {
       return { ok: true };
     }
     case "delete_test": {
-      db.prepare(`DELETE FROM tests WHERE test_id = ?`).run(payload.testId);
+      deleteTestWithDependencies(payload.testId);
       return { ok: true };
     }
     case "create_range": {
@@ -494,10 +612,19 @@ export function catalogAction(action: string, payload: any) {
     case "update_report_settings": {
       db.prepare(
         `UPDATE report_settings
-         SET show_last_result = ?, no_range_placeholder = ?, hide_empty_rows = ?,
+         SET report_header_image_url = ?, lab_name = ?, lab_address = ?, lab_phone = ?, lab_email = ?,
+             report_header_text = ?, report_footer_text = ?,
+             show_last_result = ?, no_range_placeholder = ?, hide_empty_rows = ?,
              hide_empty_panels = ?, hide_empty_departments = ?
          WHERE id = 1`
       ).run(
+        String(payload.reportHeaderImageUrl || "").trim(),
+        normalize(payload.labName || ""),
+        String(payload.labAddress || "").trim(),
+        normalize(payload.labPhone || ""),
+        normalize(payload.labEmail || ""),
+        String(payload.reportHeaderText || "").trim(),
+        String(payload.reportFooterText || "").trim(),
         payload.showLastResult ? 1 : 0,
         normalize(payload.noRangePlaceholder || "") || "—",
         payload.hideEmptyRows ? 1 : 0,

@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { verifyPassword } from "./auth-utils";
-import { findEmployeeForAuthByEmail } from "./sqlite-auth";
+import { findEmployeeForAuth } from "./sqlite-auth";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true, // Required for NextAuth v5
@@ -24,22 +24,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: "Employee Login",
       credentials: {
-        email: { label: "Email", type: "email" },
+        username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.username || !credentials?.password) {
           console.error("Missing credentials");
           return null;
         }
 
         try {
-          const employee = findEmployeeForAuthByEmail(
-            credentials.email as string
-          );
+          const employee = findEmployeeForAuth(credentials.username as string);
 
           if (!employee || !employee.isActive) {
-            console.error("Employee not found or inactive:", credentials.email);
+            console.error("Employee not found or inactive:", credentials.username);
             return null;
           }
 
@@ -49,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
 
           if (!isValid) {
-            console.error("Invalid password for:", credentials.email);
+            console.error("Invalid password for:", credentials.username);
             return null;
           }
 

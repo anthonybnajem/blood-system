@@ -6,7 +6,15 @@ import { DatabaseSync } from "node:sqlite";
 
 const DEFAULT_DB_PATH = "data/app.sqlite";
 const DEFAULT_BACKUP_DIR = "data/backups";
-const SQLITE_SCHEMA_PATH = path.join(process.cwd(), "sql", "sqlite-schema.sql");
+function resolveSchemaPath() {
+  const configuredPath = process.env.SQLITE_SCHEMA_PATH?.trim();
+  if (configuredPath) {
+    return path.isAbsolute(configuredPath)
+      ? configuredPath
+      : path.join(process.cwd(), configuredPath);
+  }
+  return path.join(process.cwd(), "sql", "sqlite-schema.sql");
+}
 const DEFAULT_AUTO_BACKUP_HOUR = 2;
 const DEFAULT_AUTO_BACKUP_MINUTE = 0;
 const DEFAULT_AUTO_BACKUP_RETENTION_DAYS = 14;
@@ -70,10 +78,11 @@ function applyConnectionPragmas(db: DatabaseSync) {
 }
 
 function applySchema(db: DatabaseSync) {
-  if (!fs.existsSync(SQLITE_SCHEMA_PATH)) {
-    throw new Error(`SQLite schema file is missing: ${SQLITE_SCHEMA_PATH}`);
+  const schemaPath = resolveSchemaPath();
+  if (!fs.existsSync(schemaPath)) {
+    throw new Error(`SQLite schema file is missing: ${schemaPath}`);
   }
-  const schemaSql = fs.readFileSync(SQLITE_SCHEMA_PATH, "utf8");
+  const schemaSql = fs.readFileSync(schemaPath, "utf8");
   db.exec("BEGIN IMMEDIATE;");
   try {
     db.exec(schemaSql);
@@ -99,6 +108,95 @@ function ensureReferenceRangeColumns(db: DatabaseSync) {
   if (!existingColumns.has("normal_high")) {
     db.exec("ALTER TABLE reference_ranges ADD COLUMN normal_high REAL;");
   }
+}
+
+function ensurePatientColumns(db: DatabaseSync) {
+  const existingColumns = new Set(
+    (
+      db.prepare(`PRAGMA table_info(patients)`).all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name)
+  );
+
+  if (!existingColumns.has("location")) {
+    db.exec("ALTER TABLE patients ADD COLUMN location TEXT;");
+  }
+  if (!existingColumns.has("first_name")) {
+    db.exec("ALTER TABLE patients ADD COLUMN first_name TEXT;");
+  }
+  if (!existingColumns.has("father_name")) {
+    db.exec("ALTER TABLE patients ADD COLUMN father_name TEXT;");
+  }
+  if (!existingColumns.has("last_name")) {
+    db.exec("ALTER TABLE patients ADD COLUMN last_name TEXT;");
+  }
+}
+
+function ensureVisitColumns(db: DatabaseSync) {
+  const existingColumns = new Set(
+    (
+      db.prepare(`PRAGMA table_info(visits)`).all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name)
+  );
+
+  if (!existingColumns.has("print_count")) {
+    db.exec("ALTER TABLE visits ADD COLUMN print_count INTEGER NOT NULL DEFAULT 0;");
+  }
+}
+
+function ensureReportSettingsColumns(db: DatabaseSync) {
+  const existingColumns = new Set(
+    (
+      db.prepare(`PRAGMA table_info(report_settings)`).all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name)
+  );
+
+  if (!existingColumns.has("report_header_image_url")) {
+    db.exec(
+      "ALTER TABLE report_settings ADD COLUMN report_header_image_url TEXT NOT NULL DEFAULT '';"
+    );
+  }
+  if (!existingColumns.has("lab_name")) {
+    db.exec("ALTER TABLE report_settings ADD COLUMN lab_name TEXT NOT NULL DEFAULT '';");
+  }
+  if (!existingColumns.has("lab_address")) {
+    db.exec("ALTER TABLE report_settings ADD COLUMN lab_address TEXT NOT NULL DEFAULT '';");
+  }
+  if (!existingColumns.has("lab_phone")) {
+    db.exec("ALTER TABLE report_settings ADD COLUMN lab_phone TEXT NOT NULL DEFAULT '';");
+  }
+  if (!existingColumns.has("lab_email")) {
+    db.exec("ALTER TABLE report_settings ADD COLUMN lab_email TEXT NOT NULL DEFAULT '';");
+  }
+  if (!existingColumns.has("report_header_text")) {
+    db.exec(
+      "ALTER TABLE report_settings ADD COLUMN report_header_text TEXT NOT NULL DEFAULT '';"
+    );
+  }
+  if (!existingColumns.has("report_footer_text")) {
+    db.exec(
+      "ALTER TABLE report_settings ADD COLUMN report_footer_text TEXT NOT NULL DEFAULT '';"
+    );
+  }
+
+  db.prepare(
+    `UPDATE report_settings
+     SET report_header_image_url = '/default-logo.png'
+     WHERE id = 1 AND trim(coalesce(report_header_image_url, '')) = ''`
+  ).run();
+
+  db.prepare(
+    `UPDATE report_settings
+     SET report_footer_text = ?
+     WHERE id = 1 AND trim(coalesce(report_footer_text, '')) = ''`
+  ).run(
+    "Tripoli - Rue Maarad - Imm. Mir - Tel: 06 / 445 455 - 03 / 104 999 - Autorisation 677/1 - Email: labazamokaddem@hotmail.com - Results Website: www.labazamokaddem.online"
+  );
 }
 
 function withWriteLockAndCheckpoint<T>(db: DatabaseSync, action: () => T) {
@@ -218,8 +316,12 @@ export function getSqliteDb() {
     sqliteDb = new DatabaseSync(resolveDbPath());
     applyConnectionPragmas(sqliteDb);
     applySchema(sqliteDb);
-    ensureReferenceRangeColumns(sqliteDb);
   }
+
+  ensureReferenceRangeColumns(sqliteDb);
+  ensurePatientColumns(sqliteDb);
+  ensureVisitColumns(sqliteDb);
+  ensureReportSettingsColumns(sqliteDb);
 
   startAutoBackupScheduler();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,7 @@ export default function LabConfigPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
   const [editDialog, setEditDialog] = useState({
     open: false,
     departmentId: "",
@@ -90,6 +91,18 @@ export default function LabConfigPage() {
     void load();
   }, []);
 
+  const filteredCategories = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return categories;
+    return categories.filter((category) => {
+      const status = category.active ? "active" : "hidden";
+      return [category.name, String(category.ordering), status]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [categories, tableSearch]);
+
   const createCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) return;
@@ -98,25 +111,47 @@ export default function LabConfigPage() {
       await callCatalogAction("create_department", { name });
       setNewCategoryName("");
       await load();
+    } catch (error: any) {
+      toast({
+        title: "Create failed",
+        description: error?.message || "Could not create category",
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
   };
 
   const saveCategory = async () => {
-    await callCatalogAction("update_department", {
-      departmentId: editDialog.departmentId,
-      name: editDialog.name,
-      ordering: editDialog.ordering,
-      active: editDialog.active,
-    });
-    setEditDialog((p) => ({ ...p, open: false }));
-    await load();
+    try {
+      await callCatalogAction("update_department", {
+        departmentId: editDialog.departmentId,
+        name: editDialog.name,
+        ordering: editDialog.ordering,
+        active: editDialog.active,
+      });
+      setEditDialog((p) => ({ ...p, open: false }));
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error?.message || "Could not save category",
+        variant: "destructive",
+      });
+    }
   };
 
   const deleteCategory = async (departmentId: string) => {
-    await callCatalogAction("delete_department", { departmentId });
-    await load();
+    try {
+      await callCatalogAction("delete_department", { departmentId });
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error?.message || "Could not delete category",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -167,6 +202,12 @@ export default function LabConfigPage() {
           <CardTitle>Categories</CardTitle>
         </CardHeader>
         <CardContent>
+          <Input
+            value={tableSearch}
+            onChange={(e) => setTableSearch(e.target.value)}
+            placeholder="Search categories..."
+            className="mb-4 max-w-sm"
+          />
           <Table>
             <TableHeader>
               <TableRow>
@@ -177,7 +218,14 @@ export default function LabConfigPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {categories.map((c) => (
+              {filteredCategories.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    No categories match your search.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {filteredCategories.map((c) => (
                 <TableRow key={c.departmentId}>
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell>{c.ordering}</TableCell>

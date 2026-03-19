@@ -15,12 +15,12 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
+import { LogIn, UserRound, Lock, AlertCircle } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +29,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (error) setError("");
-  }, [email, password]);
+  }, [username, password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +38,13 @@ export default function SignInPage() {
 
     try {
       const result = await signIn("credentials", {
-        email,
+        username,
         password,
         redirect: false,
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError("Invalid username or password");
       } else if (result?.ok) {
         router.push(callbackUrl);
         router.refresh();
@@ -66,28 +66,28 @@ export default function SignInPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
           <CardDescription>
-            Enter your credentials to access the starter dashboard
+            Sign in with your username and password
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+            {error ? (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
-            )}
+            ) : null}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <UserRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="pl-10"
                   required
                   disabled={isLoading}
@@ -112,7 +112,11 @@ export default function SignInPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+            >
               <LogIn className="mr-2 h-4 w-4" />
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>

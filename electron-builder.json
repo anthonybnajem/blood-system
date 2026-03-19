@@ -1,0 +1,42 @@
+{
+  "appId": "com.bloodsystem.desktop",
+  "productName": "Blood System",
+  "directories": {
+    "app": "dist/desktop",
+    "output": "dist/release"
+  },
+  "files": [
+    "**/*"
+  ],
+  "asar": false,
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "${productName}-Setup-${version}.${ext}"
+  },
+  "mac": {
+    "target": [
+      {
+        "target": "dmg",
+        "arch": [
+          "arm64"
+        ]
+      }
+    ],
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "category": "public.app-category.medical"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  }
+}

@@ -10,6 +10,7 @@ import { Download, Upload, Loader2, ShieldAlert, Database } from "lucide-react";
 export function SqliteBackupRestore() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [lastDownloadedFileName, setLastDownloadedFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -32,6 +33,7 @@ export function SqliteBackupRestore() {
         .slice(0, 10)}.sqlite`;
       const fileName =
         disposition?.match(/filename="(.+)"/)?.[1] || fallbackName;
+      setLastDownloadedFileName(fileName);
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -44,7 +46,7 @@ export function SqliteBackupRestore() {
 
       toast({
         title: "SQLite Backup Complete",
-        description: "SQLite backup file downloaded successfully.",
+        description: `${fileName} was sent to your browser download location.`,
       });
     } catch (error: any) {
       toast({
@@ -104,19 +106,31 @@ export function SqliteBackupRestore() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
-          SQLite Backup & Restore
+          Lab Database Backup & Restore
         </CardTitle>
         <CardDescription>
-          Backup or restore the server-side SQLite file used for credentials.
+          Download or restore the SQLite database that stores patients, reports, and lab results.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <ShieldAlert className="h-4 w-4" />
           <AlertDescription>
-            Restoring SQLite overwrites current credential data. Keep a recent backup first.
+            Restoring a backup replaces the current lab database. Download a fresh backup before restoring.
           </AlertDescription>
         </Alert>
+
+        <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+          <div>
+            Download location: your browser’s default download folder or the location chosen by the browser.
+          </div>
+          <div className="mt-1">
+            File name:{" "}
+            <span className="font-medium text-foreground">
+              {lastDownloadedFileName || `sqlite-backup-${new Date().toISOString().slice(0, 10)}.sqlite`}
+            </span>
+          </div>
+        </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
@@ -165,7 +179,7 @@ export function SqliteBackupRestore() {
         />
       </CardContent>
       <CardFooter className="text-xs text-muted-foreground">
-        Admin/manager access required. Supported file types: `.sqlite`, `.db`.
+        Admin or manager access required. Supported file types: `.sqlite`, `.db`.
       </CardFooter>
     </Card>
   );

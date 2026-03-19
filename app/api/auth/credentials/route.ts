@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPassword } from "@/lib/auth-utils";
-import { findEmployeeForAuthByEmail } from "@/lib/sqlite-auth";
+import { findEmployeeForAuth } from "@/lib/sqlite-auth";
 
 /**
  * Credentials authentication endpoint backed by SQLite.
@@ -8,19 +8,19 @@ import { findEmployeeForAuthByEmail } from "@/lib/sqlite-auth";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { username, password } = body;
 
-    if (!email || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { error: "Username and password are required" },
         { status: 400 }
       );
     }
 
-    const employee = findEmployeeForAuthByEmail(email);
+    const employee = findEmployeeForAuth(username);
     if (!employee || !employee.isActive) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { error: "Invalid username or password" },
         { status: 401 }
       );
     }
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const isValid = await verifyPassword(password, employee.passwordHash);
     if (!isValid) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { error: "Invalid username or password" },
         { status: 401 }
       );
     }

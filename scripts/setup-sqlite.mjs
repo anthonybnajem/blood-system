@@ -6,7 +6,10 @@ import { DatabaseSync } from "node:sqlite";
 import bcrypt from "bcryptjs";
 
 const DEFAULT_DB_PATH = "data/app.sqlite";
-const SQLITE_SCHEMA_PATH = path.join(process.cwd(), "sql", "sqlite-schema.sql");
+const schemaPathConfig = (process.env.SQLITE_SCHEMA_PATH || "sql/sqlite-schema.sql").trim();
+const SQLITE_SCHEMA_PATH = path.isAbsolute(schemaPathConfig)
+  ? schemaPathConfig
+  : path.join(process.cwd(), schemaPathConfig);
 const dbPathConfig = (process.env.SQLITE_DB_PATH || DEFAULT_DB_PATH).trim();
 const dbPath = path.isAbsolute(dbPathConfig)
   ? dbPathConfig

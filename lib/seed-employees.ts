@@ -9,7 +9,7 @@ import type { Employee } from "./db";
 export const TEST_EMPLOYEES = [
   {
     name: "Admin User",
-    email: "admin@starter.local",
+    email: "admin@lab.local",
     password: "admin123",
     role: "admin" as const,
     isActive: true,
@@ -18,7 +18,7 @@ export const TEST_EMPLOYEES = [
   },
   {
     name: "Manager User",
-    email: "manager@starter.local",
+    email: "manager@lab.local",
     password: "manager123",
     role: "manager" as const,
     isActive: true,
@@ -27,7 +27,7 @@ export const TEST_EMPLOYEES = [
   },
   {
     name: "Staff User",
-    email: "staff@starter.local",
+    email: "staff@lab.local",
     password: "staff123",
     role: "staff" as const,
     isActive: true,

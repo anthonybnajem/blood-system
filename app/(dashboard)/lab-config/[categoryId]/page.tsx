@@ -100,6 +100,7 @@ export default function CategoryInputsPage() {
   const [tests, setTests] = useState<LabTest[]>([]);
   const [ranges, setRanges] = useState<Range[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [tableSearch, setTableSearch] = useState("");
 
   const [inputDialog, setInputDialog] = useState({
     open: false,
@@ -175,6 +176,27 @@ export default function CategoryInputsPage() {
       .sort((a, b) => a.panelName.localeCompare(b.panelName) || a.displayName.localeCompare(b.displayName));
   }, [tests, ranges, categoryPanels]);
 
+  const filteredRows = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => {
+      const status = row.active ? "active" : "hidden";
+      return [
+        row.panelName,
+        row.displayName,
+        row.resultType,
+        row.unit,
+        row.rangeText,
+        row.min == null ? "" : String(row.min),
+        row.max == null ? "" : String(row.max),
+        status,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [rows, tableSearch]);
+
   const openCreate = () => {
     setInputDialog({
       open: true,
@@ -210,61 +232,77 @@ export default function CategoryInputsPage() {
   };
 
   const saveInput = async () => {
-    if (inputDialog.mode === "create") {
-      if (!inputDialog.panelId || !inputDialog.displayName.trim()) return;
-      const created = await callCatalogAction("create_test", {
-        panelId: inputDialog.panelId,
-        displayName: inputDialog.displayName,
-        defaultUnit: inputDialog.defaultUnit,
-      });
-      if (inputDialog.rangeText || inputDialog.defaultUnit) {
-        await callCatalogAction("create_range", {
-          testId: created.testId,
-          gender: "Any",
-          unit: inputDialog.defaultUnit || null,
-          rangeText: inputDialog.rangeText || null,
-          normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
-          normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
+    try {
+      if (inputDialog.mode === "create") {
+        if (!inputDialog.panelId || !inputDialog.displayName.trim()) return;
+        const created = await callCatalogAction("create_test", {
+          panelId: inputDialog.panelId,
+          displayName: inputDialog.displayName,
+          defaultUnit: inputDialog.defaultUnit,
         });
-      }
-    } else {
-      await callCatalogAction("update_test", {
-        testId: inputDialog.testId,
-        displayName: inputDialog.displayName,
-        resultType: inputDialog.resultType,
-        defaultUnit: inputDialog.defaultUnit,
-        decimalPrecision: 2,
-        printOrder: 0,
-        active: inputDialog.active,
-      });
-      if (inputDialog.rangeId) {
-        await callCatalogAction("update_range", {
-          rangeId: inputDialog.rangeId,
-          gender: "Any",
-          unit: inputDialog.defaultUnit || null,
-          rangeText: inputDialog.rangeText || null,
-          normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
-          normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
-        });
-      } else if (inputDialog.rangeText || inputDialog.defaultUnit) {
-        await callCatalogAction("create_range", {
+        if (inputDialog.rangeText || inputDialog.defaultUnit) {
+          await callCatalogAction("create_range", {
+            testId: created.testId,
+            gender: "Any",
+            unit: inputDialog.defaultUnit || null,
+            rangeText: inputDialog.rangeText || null,
+            normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
+            normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
+          });
+        }
+      } else {
+        await callCatalogAction("update_test", {
           testId: inputDialog.testId,
-          gender: "Any",
-          unit: inputDialog.defaultUnit || null,
-          rangeText: inputDialog.rangeText || null,
-          normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
-          normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
+          displayName: inputDialog.displayName,
+          resultType: inputDialog.resultType,
+          defaultUnit: inputDialog.defaultUnit,
+          decimalPrecision: 2,
+          printOrder: 0,
+          active: inputDialog.active,
         });
+        if (inputDialog.rangeId) {
+          await callCatalogAction("update_range", {
+            rangeId: inputDialog.rangeId,
+            gender: "Any",
+            unit: inputDialog.defaultUnit || null,
+            rangeText: inputDialog.rangeText || null,
+            normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
+            normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
+          });
+        } else if (inputDialog.rangeText || inputDialog.defaultUnit) {
+          await callCatalogAction("create_range", {
+            testId: inputDialog.testId,
+            gender: "Any",
+            unit: inputDialog.defaultUnit || null,
+            rangeText: inputDialog.rangeText || null,
+            normalLow: inputDialog.normalLow.trim() ? Number(inputDialog.normalLow) : null,
+            normalHigh: inputDialog.normalHigh.trim() ? Number(inputDialog.normalHigh) : null,
+          });
+        }
       }
-    }
 
-    setInputDialog((p) => ({ ...p, open: false }));
-    await load();
+      setInputDialog((p) => ({ ...p, open: false }));
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error?.message || "Could not save input",
+        variant: "destructive",
+      });
+    }
   };
 
   const deleteInput = async (testId: string) => {
-    await callCatalogAction("delete_test", { testId });
-    await load();
+    try {
+      await callCatalogAction("delete_test", { testId });
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error?.message || "Could not delete input",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -317,67 +355,82 @@ export default function CategoryInputsPage() {
               No panels found for this category.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Panel</TableHead>
-                  <TableHead>Input Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Range</TableHead>
-                  <TableHead>Min</TableHead>
-                  <TableHead>Max</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.testId}>
-                    <TableCell>{row.panelName}</TableCell>
-                    <TableCell className="font-medium">{row.displayName}</TableCell>
-                    <TableCell>{row.resultType}</TableCell>
-                    <TableCell>{row.unit || "-"}</TableCell>
-                    <TableCell>{row.rangeText || "-"}</TableCell>
-                    <TableCell>{row.min ?? "-"}</TableCell>
-                    <TableCell>{row.max ?? "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant={row.active ? "default" : "secondary"}>
-                        {row.active ? "active" : "hidden"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                          Edit
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              Delete
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete input?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action deletes the input and linked range.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => void deleteInput(row.testId)}>
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
+            <>
+              <Input
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder="Search inputs..."
+                className="mb-4 max-w-sm"
+              />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Panel</TableHead>
+                    <TableHead>Input Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Range</TableHead>
+                    <TableHead>Min</TableHead>
+                    <TableHead>Max</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground">
+                        No inputs match your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {filteredRows.map((row) => (
+                    <TableRow key={row.testId}>
+                      <TableCell>{row.panelName}</TableCell>
+                      <TableCell className="font-medium">{row.displayName}</TableCell>
+                      <TableCell>{row.resultType}</TableCell>
+                      <TableCell>{row.unit || "-"}</TableCell>
+                      <TableCell>{row.rangeText || "-"}</TableCell>
+                      <TableCell>{row.min ?? "-"}</TableCell>
+                      <TableCell>{row.max ?? "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant={row.active ? "default" : "secondary"}>
+                          {row.active ? "active" : "hidden"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
+                            Edit
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive">
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete input?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action deletes the input and linked range.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => void deleteInput(row.testId)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
       </Card>

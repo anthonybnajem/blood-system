@@ -27,6 +27,40 @@ export default function MainLayout({
   const { canUseEnterpriseFeatures, addSyncRecord, stores } = useSubscription()
   const { licenseInfo, licenseStatus } = useLicense()
   const [isOnline, setIsOnline] = useState(true)
+  const pageTitle =
+    pathname === "/dashboard"
+      ? "Dashboard"
+      : pathname === "/overview/patients"
+        ? "Patients Overview"
+        : pathname === "/overview/reports"
+          ? "Reports Overview"
+          : pathname === "/overview/results"
+            ? "Results Overview"
+            : pathname === "/overview/tests"
+              ? "Tests Overview"
+              : pathname === "/lab-entry/search"
+                ? "Patients"
+                : pathname === "/lab-entry/create-patient"
+                  ? "Create Patient"
+                  : pathname === "/lab-entry/tutorial"
+                    ? "How To Use"
+                    : pathname === "/contact-developer"
+                      ? "Contact Developer"
+                      : pathname.startsWith("/lab-entry/patients/") && pathname.endsWith("/new-report")
+                        ? "Report Editor"
+                        : pathname.startsWith("/lab-entry/patients/")
+                          ? "Patient Details"
+                          : pathname === "/sales"
+                            ? "Sales"
+                            : pathname === "/products"
+                              ? "Products"
+                              : pathname === "/categories"
+                                ? "Categories"
+                                : pathname === "/reports"
+                                  ? "Reports"
+                                  : pathname === "/settings"
+                                    ? "Settings"
+                                    : ""
 
   useEffect(() => {
     setIsMounted(true)
@@ -90,15 +124,7 @@ export default function MainLayout({
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-6 py-3 border-b">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold">
-              {pathname === "/dashboard" && "Dashboard"}
-              {pathname === "/sales" && "Sales"}
-              {pathname === "/products" && "Products"}
-              {pathname === "/categories" && "Categories"}
-              {pathname === "/reports" && "Reports"}
-              {pathname === "/settings" && "Settings"}
-              {/* {pathname === "/settings/subscription" && "Subscription"} */}
-            </h1>
+            <h1 className="text-xl font-semibold">{pageTitle}</h1>
             {stores.length > 1 && <StoreSelector />}
           </div>
           <div className="flex items-center space-x-4">

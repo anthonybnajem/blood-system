@@ -31,11 +31,24 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Employee["role"]>(DEFAULT_ROLE);
   const [isActive, setIsActive] = useState(true);
+  const [tableSearch, setTableSearch] = useState("");
 
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
     [users]
   );
+
+  const filteredUsers = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return sortedUsers;
+    return sortedUsers.filter((user) => {
+      const status = user.isActive ? "active" : "inactive";
+      return [user.name, user.email, user.role, status]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [sortedUsers, tableSearch]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -180,6 +193,9 @@ export default function UsersPage() {
             <Label htmlFor="active">Active user</Label>
           </div>
           <div className="md:col-span-2">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Login uses the username part before <code>@</code>. Example: <code>admin@lab.local</code> signs in as <code>admin</code>.
+            </p>
             <Button onClick={createUser} disabled={saving}>
               {saving ? "Saving..." : "Create User"}
             </Button>
@@ -192,6 +208,12 @@ export default function UsersPage() {
           <CardTitle>All Users</CardTitle>
         </CardHeader>
         <CardContent>
+          <Input
+            value={tableSearch}
+            onChange={(e) => setTableSearch(e.target.value)}
+            placeholder="Search users..."
+            className="mb-4 max-w-sm"
+          />
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading users...</p>
           ) : (
@@ -206,7 +228,14 @@ export default function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedUsers.map((user) => (
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      No users match your search.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>

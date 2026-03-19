@@ -11,6 +11,12 @@ import {
   LayoutTemplate,
   FlaskConical,
   ClipboardCheck,
+  Search,
+  UserPlus,
+  BookOpen,
+  BadgeHelp,
+  ClipboardList,
+  Activity,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -48,10 +54,20 @@ interface NavItem {
 
 const navMain: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/lab-entry", label: "Lab Entry", icon: ClipboardCheck },
+ 
+  { href: "/lab-entry/search", label: "Search", icon: Search },
+  { href: "/lab-entry/create-patient", label: "Create Patient", icon: UserPlus },
+
+  // { href: "/lab-entry", label: "Lab Entry", icon: ClipboardCheck },
   { href: "/lab-config", label: "Lab Config", icon: FlaskConical, roles: ["admin", "manager"] },
-  { href: "/components", label: "Components", icon: Blocks },
+  // { href: "/components", label: "Components", icon: Blocks },
+   { href: "/overview/patients", label: "Patients", icon: Users },
+  { href: "/overview/reports", label: "Reports", icon: ClipboardList },
+  { href: "/overview/results", label: "Results", icon: Activity },
+  { href: "/overview/tests", label: "Tests", icon: FlaskConical, roles: ["admin", "manager"] },
   { href: "/employees", label: "Users", icon: Users, roles: ["admin", "manager"] },
+  { href: "/lab-entry/tutorial", label: "Tutorial", icon: BookOpen },
+  { href: "/contact-developer", label: "Contact Developer", icon: BadgeHelp },
 ];
 
 function NavMain({ items }: { items: NavItem[] }) {
@@ -109,8 +125,8 @@ export function AppSidebar() {
                   <LayoutTemplate className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Boilerplate Dashboard</span>
-                  <span className="truncate text-xs">Starter Template</span>
+                  <span className="truncate font-semibold">Dashboard</span>
+                  <span className="truncate text-xs">Zgharta</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -154,7 +170,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg" className="w-full">
+                <SidebarMenuButton size="xl" className="w-full">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>
                       {userName

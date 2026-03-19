@@ -41,11 +41,15 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS patients (
   patient_id TEXT PRIMARY KEY,
   full_name TEXT NOT NULL,
+  first_name TEXT,
+  father_name TEXT,
+  last_name TEXT,
   gender TEXT NOT NULL DEFAULT 'Unknown' CHECK (
     gender IN ('Male', 'Female', 'Other', 'Unknown')
   ),
   date_of_birth TEXT,
   phone TEXT,
+  location TEXT,
   notes TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -65,6 +69,7 @@ CREATE TABLE IF NOT EXISTS visits (
   verified_by TEXT REFERENCES users (user_id) ON DELETE SET NULL,
   verified_at TEXT,
   printed_at TEXT,
+  print_count INTEGER NOT NULL DEFAULT 0,
   notes TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -164,6 +169,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE TABLE IF NOT EXISTS report_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
+  report_header_image_url TEXT NOT NULL DEFAULT '',
+  lab_name TEXT NOT NULL DEFAULT '',
+  lab_address TEXT NOT NULL DEFAULT '',
+  lab_phone TEXT NOT NULL DEFAULT '',
+  lab_email TEXT NOT NULL DEFAULT '',
+  report_header_text TEXT NOT NULL DEFAULT '',
+  report_footer_text TEXT NOT NULL DEFAULT 'Tripoli - Rue Maarad - Imm. Mir - Tel: 06 / 445 455 - 03 / 104 999 - Autorisation 677/1 - Email: labazamokaddem@hotmail.com - Results Website: www.labazamokaddem.online',
   show_last_result INTEGER NOT NULL DEFAULT 1 CHECK (show_last_result IN (0, 1)),
   no_range_placeholder TEXT NOT NULL DEFAULT '—',
   hide_empty_rows INTEGER NOT NULL DEFAULT 1 CHECK (hide_empty_rows IN (0, 1)),
@@ -174,12 +186,33 @@ CREATE TABLE IF NOT EXISTS report_settings (
 
 INSERT OR IGNORE INTO report_settings (
   id,
+  report_header_image_url,
+  lab_name,
+  lab_address,
+  lab_phone,
+  lab_email,
+  report_header_text,
+  report_footer_text,
   show_last_result,
   no_range_placeholder,
   hide_empty_rows,
   hide_empty_panels,
   hide_empty_departments
-) VALUES (1, 1, '—', 1, 1, 1);
+) VALUES (
+  1,
+  '/default-logo.png',
+  '',
+  '',
+  '',
+  '',
+  '',
+  'Tripoli - Rue Maarad - Imm. Mir - Tel: 06 / 445 455 - 03 / 104 999 - Autorisation 677/1 - Email: labazamokaddem@hotmail.com - Results Website: www.labazamokaddem.online',
+  1,
+  '—',
+  1,
+  1,
+  1
+);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role, active);
 CREATE INDEX IF NOT EXISTS idx_patients_name ON patients (full_name);

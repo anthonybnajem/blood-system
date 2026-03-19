@@ -25,6 +25,7 @@ import { ReceiptContent } from "@/components/receipt-content";
 import { getReceiptStyles } from "@/lib/receipt-print";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { DEFAULT_RECEIPT_SETTINGS } from "@/lib/db";
 
 export function ReceiptDesigner() {
   const { settings, isLoading, updateSettings } = useReceiptSettings();
@@ -102,7 +103,11 @@ export function ReceiptDesigner() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const normalizedValue =
+      name === "taxRate" || name === "logoSize" || name === "receiptWidth" || name === "fontSize"
+        ? Number(value) || 0
+        : value;
+    setFormData((prev) => ({ ...prev, [name]: normalizedValue }));
   };
 
   const handleSwitchChange = (name: string, checked: boolean) => {
@@ -144,7 +149,50 @@ export function ReceiptDesigner() {
   };
 
   const handleReset = async () => {
-    console.log("Resetting settings to default");
+    setIsSaving(true);
+    try {
+      await updateSettings(DEFAULT_RECEIPT_SETTINGS);
+      setFormData({
+        storeName: DEFAULT_RECEIPT_SETTINGS.storeName || "",
+        storeAddress: DEFAULT_RECEIPT_SETTINGS.storeAddress || "",
+        storePhone: DEFAULT_RECEIPT_SETTINGS.storePhone || "",
+        storeEmail: DEFAULT_RECEIPT_SETTINGS.storeEmail || "",
+        storeWebsite: DEFAULT_RECEIPT_SETTINGS.storeWebsite || "",
+        storeLogo: DEFAULT_RECEIPT_SETTINGS.storeLogo || "",
+        showLogo: DEFAULT_RECEIPT_SETTINGS.showLogo,
+        logoSize: DEFAULT_RECEIPT_SETTINGS.logoSize || 100,
+        taxRate: DEFAULT_RECEIPT_SETTINGS.taxRate,
+        showTax: DEFAULT_RECEIPT_SETTINGS.showTax,
+        currency: DEFAULT_RECEIPT_SETTINGS.currency,
+        currencySymbol: DEFAULT_RECEIPT_SETTINGS.currencySymbol,
+        footerText: DEFAULT_RECEIPT_SETTINGS.footerText || "",
+        headerText: DEFAULT_RECEIPT_SETTINGS.headerText || "",
+        showDiscounts: DEFAULT_RECEIPT_SETTINGS.showDiscounts,
+        showItemizedTax: DEFAULT_RECEIPT_SETTINGS.showItemizedTax,
+        printAutomatically: DEFAULT_RECEIPT_SETTINGS.printAutomatically,
+        receiptWidth: DEFAULT_RECEIPT_SETTINGS.receiptWidth,
+        fontSize: DEFAULT_RECEIPT_SETTINGS.fontSize,
+        fontFamily: DEFAULT_RECEIPT_SETTINGS.fontFamily,
+        thankYouMessage: DEFAULT_RECEIPT_SETTINGS.thankYouMessage || "",
+        returnPolicy: DEFAULT_RECEIPT_SETTINGS.returnPolicy || "",
+        showBarcode: DEFAULT_RECEIPT_SETTINGS.showBarcode ?? false,
+        showInstagramQr: DEFAULT_RECEIPT_SETTINGS.showInstagramQr ?? false,
+        instagramUrl: DEFAULT_RECEIPT_SETTINGS.instagramUrl || "",
+      });
+      toast({
+        title: "Receipt settings reset",
+        description: "Receipt designer settings were restored to defaults.",
+      });
+    } catch (error) {
+      console.error("Failed to reset receipt settings:", error);
+      toast({
+        title: "Reset failed",
+        description: "Could not reset receipt settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const [isPrinting, setIsPrinting] = useState(false);

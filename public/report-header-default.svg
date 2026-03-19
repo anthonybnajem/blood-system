@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Default Report Header</title>
+  <desc id="desc">Arabic laboratory report header styled like the printed sample.</desc>
+  <rect width="1200" height="420" fill="#ffffff"/>
+  <foreignObject x="0" y="0" width="1200" height="420">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:1200px;height:420px;background:#fff;display:flex;align-items:flex-start;justify-content:flex-start;">
+      <div style="width:100%;padding:14px 0 0 0;color:#26285f;font-family:'Al Bayan','Geeza Pro','SF Arabic','Noto Naskh Arabic','Amiri',serif;direction:rtl;text-align:right;line-height:0.95;">
+        <div style="font-size:178px;font-weight:700;letter-spacing:0;">المختبر الطبي</div>
+        <div style="font-size:122px;font-weight:500;margin-top:22px;padding-right:370px;">زغرتا</div>
+        <div style="font-size:98px;font-weight:500;margin-top:28px;">هاتف: ٦٦١٦٦٨ / ٠٦</div>
+      </div>
+    </div>
+  </foreignObject>
+</svg>

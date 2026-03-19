@@ -7,6 +7,8 @@ const startUrl = `http://localhost:${port}`;
 const maxAttempts = 120;
 const pollIntervalMs = 500;
 const env = { ...process.env, ELECTRON_DEV: "1", ELECTRON_START_URL: startUrl };
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
 
 const childProcesses = [];
 let shuttingDown = false;
@@ -50,16 +52,24 @@ function shutdown(code = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-const nextDev = spawnProcess("npm", ["run", "dev"], { env });
-nextDev.on("exit", (code) => {
-  if (!shuttingDown) {
-    shutdown(code ?? 1);
-  }
-});
-
 try {
+  const dbSetup = spawnProcess(npmCmd, ["run", "db:setup"], { env });
+  await new Promise((resolve, reject) => {
+    dbSetup.on("exit", (code) => {
+      if (code === 0) resolve(undefined);
+      else reject(new Error(`DB setup failed with exit code ${code ?? 1}`));
+    });
+  });
+
+  const nextDev = spawnProcess(npmCmd, ["run", "dev"], { env });
+  nextDev.on("exit", (code) => {
+    if (!shuttingDown) {
+      shutdown(code ?? 1);
+    }
+  });
+
   await waitForServer(startUrl);
-  const electron = spawnProcess("npx", ["electron", "."], { env });
+  const electron = spawnProcess(npxCmd, ["electron", "."], { env });
   electron.on("exit", (code) => shutdown(code ?? 0));
 } catch (error) {
   console.error(`[electron:dev] ${error.message}`);
