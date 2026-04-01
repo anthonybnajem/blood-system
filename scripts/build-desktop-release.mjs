@@ -43,7 +43,7 @@ if (bundleResult.status !== 0) {
 
 const builderArgs =
   target === "mac"
-    ? ["electron-builder", "--mac", "dmg", "--arm64", "--config", tempConfigPath]
+    ? ["electron-builder", "--mac", "dmg", "zip", "--arm64", "--config", tempConfigPath]
     : ["electron-builder", "--win", "nsis", "--x64", "--config", tempConfigPath];
 const publishMode = process.env.GH_TOKEN ? "always" : "never";
 builderArgs.push("--publish", publishMode);
