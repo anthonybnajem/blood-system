@@ -18,11 +18,11 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import {
   buildPrintableReportHtml,
-  escapeHtml,
   formatDate,
   formatDateTime,
   type PrintableLabReport,
 } from "@/lib/lab-print-report";
+import { openDesktopPrintPreview } from "@/lib/electron-utils";
 
 type Patient = {
   patientId: string;
@@ -164,38 +164,33 @@ export default function LabEntryPatientPage() {
   );
 
   const openPrintableReport = async (targetVisitId: string) => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      toast({
-        title: "Preview failed",
-        description: "Could not open report preview window",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    printWindow.document.open();
-    printWindow.document.write(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><title>Preparing report...</title><style>body{margin:0;display:grid;place-items:center;min-height:100vh;font-family:Arial,sans-serif;background:#f5f1ea;color:#111;}</style></head><body><div>Preparing report preview...</div></body></html>`);
-    printWindow.document.close();
-
     setPrintingVisitId(targetVisitId);
     try {
       const report = await apiGet<PrintableLabReport>(
         `/api/lab/reports/${encodeURIComponent(targetVisitId)}`
       );
-      printWindow.document.open();
-      printWindow.document.write(buildPrintableReportHtml(report));
-      printWindow.document.close();
+      const reportHtml = buildPrintableReportHtml(report);
+      const openedInDesktop = await openDesktopPrintPreview({
+        html: reportHtml,
+        title: `Lab Report ${report.caseNo}`,
+        baseUrl: window.location.origin,
+      });
+
+      if (!openedInDesktop) {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+          throw new Error("Could not open report preview window");
+        }
+        printWindow.document.open();
+        printWindow.document.write(reportHtml);
+        printWindow.document.close();
+      }
+
       toast({
         title: "Report preview ready",
         description: `Opened report ${report.caseNo}.`,
       });
     } catch (error: any) {
-      printWindow.document.open();
-      printWindow.document.write(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><title>Report preview failed</title><style>body{margin:0;display:grid;place-items:center;min-height:100vh;font-family:Arial,sans-serif;background:#fff;color:#111;}.message{max-width:560px;padding:24px;text-align:center;}.title{font-size:18px;font-weight:700;margin-bottom:8px;}</style></head><body><div class="message"><div class="title">Could not generate the report preview.</div><div>${escapeHtml(error?.message || "Unknown error")}</div></div></body></html>`);
-      printWindow.document.close();
       toast({
         title: "Preview failed",
         description: error?.message || "Could not generate the report preview",

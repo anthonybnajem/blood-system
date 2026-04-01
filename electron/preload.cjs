@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isElectron: () => ipcRenderer.invoke("electron:is-electron"),
   getVersion: () => ipcRenderer.invoke("electron:get-version"),
   openExternal: (url) => ipcRenderer.invoke("electron:open-external", url),
+  openPrintPreview: (payload) => ipcRenderer.invoke("electron:open-print-preview", payload),
   getUpdateState: () => ipcRenderer.invoke("electron:get-update-state"),
   checkForUpdates: () => ipcRenderer.invoke("electron:check-for-updates"),
   downloadUpdate: () => ipcRenderer.invoke("electron:download-update"),

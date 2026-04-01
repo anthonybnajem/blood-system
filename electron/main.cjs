@@ -294,6 +294,25 @@ function stopBundledServer() {
   nextServerProcess = null;
 }
 
+function escapeHtmlAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
+function injectBaseHref(html, baseUrl) {
+  if (!baseUrl) {
+    return html;
+  }
+
+  const baseTag = `<base href="${escapeHtmlAttribute(baseUrl)}" />`;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
+  }
+
+  return `${baseTag}${html}`;
+}
+
 function createWindow(startUrl) {
   const startOrigin = new URL(startUrl).origin;
 
@@ -312,6 +331,19 @@ function createWindow(startUrl) {
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (!url || url === "about:blank") {
+      return { action: "allow" };
+    }
+
+    try {
+      const targetUrl = new URL(url, startUrl);
+      if (targetUrl.origin === startOrigin) {
+        return { action: "allow" };
+      }
+    } catch (_error) {
+      return { action: "allow" };
+    }
+
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -340,6 +372,46 @@ ipcMain.handle("electron:open-external", async (_event, url) => {
     return false;
   }
   await shell.openExternal(url);
+  return true;
+});
+ipcMain.handle("electron:open-print-preview", async (event, payload) => {
+  const html = typeof payload?.html === "string" ? payload.html : "";
+  const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+  const baseUrl = typeof payload?.baseUrl === "string" ? payload.baseUrl.trim() : "";
+
+  if (!html) {
+    return false;
+  }
+
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow() || null;
+  const previewWindow = new BrowserWindow({
+    width: 1024,
+    height: 900,
+    minWidth: 800,
+    minHeight: 600,
+    parent: parentWindow || undefined,
+    backgroundColor: "#f3f1ec",
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  previewWindow.once("ready-to-show", () => {
+    previewWindow.show();
+  });
+
+  await previewWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(injectBaseHref(html, baseUrl))}`
+  );
+
+  if (title) {
+    previewWindow.setTitle(title);
+  }
+
   return true;
 });
 ipcMain.handle("electron:get-update-state", () => updateState);

@@ -37,6 +37,11 @@ declare global {
       isElectron: () => Promise<boolean>;
       getVersion: () => Promise<string>;
       openExternal: (url: string) => Promise<boolean>;
+      openPrintPreview: (payload: {
+        html: string;
+        title?: string;
+        baseUrl?: string;
+      }) => Promise<boolean>;
       getUpdateState: () => Promise<DesktopUpdateState>;
       checkForUpdates: () => Promise<DesktopUpdateState>;
       downloadUpdate: () => Promise<DesktopUpdateState>;
@@ -137,6 +142,23 @@ export const openExternalLink = (url: string): void => {
   }
 
   window.open(url, "_blank");
+};
+
+export const openDesktopPrintPreview = async (payload: {
+  html: string;
+  title?: string;
+  baseUrl?: string;
+}): Promise<boolean> => {
+  if (typeof window === "undefined" || !window.electronAPI?.openPrintPreview) {
+    return false;
+  }
+
+  try {
+    return await window.electronAPI.openPrintPreview(payload);
+  } catch (error) {
+    console.error("Failed to open Electron print preview:", error);
+    return false;
+  }
 };
 
 export const getDesktopUpdateState = async (): Promise<DesktopUpdateState> => {
