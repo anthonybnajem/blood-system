@@ -3,12 +3,185 @@ const fs = require("node:fs");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 
 const port = Number(process.env.PORT || (app.isPackaged ? "3210" : "3000"));
 const isDev = process.env.ELECTRON_DEV === "1";
 const externalStartUrl = process.env.ELECTRON_START_URL || "";
 const startUrlFromPort = `http://127.0.0.1:${port}`;
 let nextServerProcess = null;
+let updaterInitialized = false;
+let updateState = {
+  supported: false,
+  configured: false,
+  status: "unavailable",
+  message: "Updates are only available in packaged desktop builds.",
+  currentVersion: app.getVersion(),
+  availableVersion: null,
+  downloadedVersion: null,
+  progressPercent: null,
+};
+
+function broadcastUpdateState() {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send("electron:update-state", updateState);
+  }
+}
+
+function setUpdateState(patch) {
+  updateState = {
+    ...updateState,
+    ...patch,
+  };
+  broadcastUpdateState();
+}
+
+function getRuntimeUpdateFeedUrl() {
+  const rawUrl = process.env.AUTO_UPDATE_URL || process.env.DESKTOP_UPDATE_URL;
+  if (!rawUrl) {
+    return "";
+  }
+
+  return rawUrl.trim().replace(/\/+$/, "");
+}
+
+function getRuntimeGitHubRepo() {
+  const rawRepo = process.env.GITHUB_UPDATER_REPOSITORY || process.env.GITHUB_REPOSITORY;
+  if (!rawRepo) {
+    return null;
+  }
+
+  const [owner, repo] = rawRepo.trim().split("/", 2);
+  if (!owner || !repo) {
+    return null;
+  }
+
+  return { owner, repo };
+}
+
+function hasBundledUpdateConfig() {
+  return fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
+}
+
+function initializeUpdater() {
+  if (updaterInitialized) {
+    return;
+  }
+  updaterInitialized = true;
+
+  if (!app.isPackaged) {
+    setUpdateState({
+      supported: false,
+      configured: false,
+      status: "unavailable",
+      message: "Updater is disabled while running in development mode.",
+    });
+    return;
+  }
+
+  const runtimeFeedUrl = getRuntimeUpdateFeedUrl();
+  const runtimeGitHubRepo = getRuntimeGitHubRepo();
+  const bundledConfigExists = hasBundledUpdateConfig();
+
+  if (!bundledConfigExists && !runtimeFeedUrl && !runtimeGitHubRepo) {
+    setUpdateState({
+      supported: true,
+      configured: false,
+      status: "unavailable",
+      message: "No GitHub release or direct update feed is configured for this build.",
+    });
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  if (runtimeFeedUrl) {
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: runtimeFeedUrl,
+    });
+  } else if (runtimeGitHubRepo) {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: runtimeGitHubRepo.owner,
+      repo: runtimeGitHubRepo.repo,
+      releaseType: "release",
+    });
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    setUpdateState({
+      supported: true,
+      configured: true,
+      status: "checking",
+      message: "Checking for updates...",
+      progressPercent: null,
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    setUpdateState({
+      supported: true,
+      configured: true,
+      status: "available",
+      message: `Version ${info.version} is available.`,
+      availableVersion: info.version || null,
+      downloadedVersion: null,
+      progressPercent: null,
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    setUpdateState({
+      supported: true,
+      configured: true,
+      status: "idle",
+      message: "This device is already on the latest version.",
+      availableVersion: null,
+      downloadedVersion: null,
+      progressPercent: null,
+    });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    setUpdateState({
+      supported: true,
+      configured: true,
+      status: "downloading",
+      message: `Downloading update... ${Math.round(progress.percent)}%`,
+      progressPercent: progress.percent,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    setUpdateState({
+      supported: true,
+      configured: true,
+      status: "downloaded",
+      message: "Update downloaded. Restart to install it.",
+      downloadedVersion: info.version || updateState.availableVersion,
+      progressPercent: 100,
+    });
+  });
+
+  autoUpdater.on("error", (error) => {
+    setUpdateState({
+      supported: true,
+      configured: bundledConfigExists || Boolean(runtimeFeedUrl) || Boolean(runtimeGitHubRepo),
+      status: "error",
+      message: error?.message || "The updater failed.",
+      progressPercent: null,
+    });
+  });
+
+  setUpdateState({
+    supported: true,
+    configured: true,
+    status: "idle",
+    message: "Ready to check for updates.",
+  });
+}
 
 function waitForServer(url, timeoutMs = 30_000) {
   const startedAt = Date.now();
@@ -151,6 +324,9 @@ function createWindow(startUrl) {
   });
 
   win.loadURL(startUrl);
+  win.webContents.once("did-finish-load", () => {
+    win.webContents.send("electron:update-state", updateState);
+  });
 
   if (isDev) {
     win.webContents.openDevTools({ mode: "detach" });
@@ -166,9 +342,55 @@ ipcMain.handle("electron:open-external", async (_event, url) => {
   await shell.openExternal(url);
   return true;
 });
+ipcMain.handle("electron:get-update-state", () => updateState);
+ipcMain.handle("electron:check-for-updates", async () => {
+  initializeUpdater();
+  if (!updateState.configured) {
+    return updateState;
+  }
+
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    setUpdateState({
+      status: "error",
+      message: error?.message || "Could not check for updates.",
+      progressPercent: null,
+    });
+  }
+
+  return updateState;
+});
+ipcMain.handle("electron:download-update", async () => {
+  initializeUpdater();
+  if (!updateState.configured) {
+    return updateState;
+  }
+
+  try {
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    setUpdateState({
+      status: "error",
+      message: error?.message || "Could not download the update.",
+      progressPercent: null,
+    });
+  }
+
+  return updateState;
+});
+ipcMain.handle("electron:quit-and-install-update", () => {
+  initializeUpdater();
+  if (updateState.status === "downloaded") {
+    autoUpdater.quitAndInstall();
+    return true;
+  }
+  return false;
+});
 
 app.whenReady().then(async () => {
   try {
+    initializeUpdater();
     let resolvedStartUrl = externalStartUrl || startUrlFromPort;
     if (app.isPackaged && !externalStartUrl) {
       resolvedStartUrl = await startBundledServer();

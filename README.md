@@ -61,6 +61,17 @@ Desktop mode is now wired with Electron main/preload processes and secure IPC.
 3. Run desktop against production build:
    - `npm run build`
    - `npm run desktop:start`
+4. Build a Windows installer for local testing:
+   - `npm run desktop:dist:win`
+5. Build a Windows installer for GitHub Releases:
+   - `GITHUB_REPOSITORY=anthonybnajem/blood-system npm run desktop:dist:win:release`
+
+Windows auto-update notes:
+
+- Release builds generated with `desktop:dist:win:release` target GitHub Releases.
+- Publish tagged releases from GitHub Actions with `.github/workflows/windows-release.yml`.
+- Push a tag such as `v0.1.0` to trigger the workflow and publish the Windows installer assets to the repo release.
+- In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
 
 Files added for Electron runtime:
 
@@ -73,11 +84,13 @@ Files added for Electron runtime:
 
 The Settings page now includes:
 
-- `General` tab: project name + theme mode.
+- `General` tab:
+  - Project settings and theme mode.
+  - Desktop updater controls when the app is running inside Electron.
 - `Backup & Restore` tab:
   - Browser data backup/import (IndexedDB ZIP/JSON).
   - SQLite file backup/restore for server-side credential data.
-- `Developer` tab:
+- `Lab Tools` tab:
   - Browser DB health check and IndexedDB reset tools.
 
 ## Lab API (SQLite)
