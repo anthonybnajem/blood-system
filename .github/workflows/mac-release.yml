@@ -27,6 +27,7 @@ jobs:
         run: npm ci
 
       - name: Validate mac signing secrets
+        id: validate_secrets
         env:
           MAC_CERTIFICATE_P12_BASE64: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
           MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
@@ -42,10 +43,13 @@ jobs:
           [[ -n "$APPLE_TEAM_ID" ]] || missing+=("APPLE_TEAM_ID")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Missing required mac release secrets: ${missing[*]}"
-            exit 1
+            echo "can_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "can_publish=true" >> "$GITHUB_OUTPUT"
 
       - name: Prepare mac signing certificate
+        if: steps.validate_secrets.outputs.can_publish == 'true'
         env:
           MAC_CERTIFICATE_P12_BASE64: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
         run: |
@@ -54,6 +58,7 @@ jobs:
           echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
 
       - name: Build and publish Mac release
+        if: steps.validate_secrets.outputs.can_publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -62,3 +67,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run desktop:dist:mac:release
+
+      - name: Skip unsigned mac release
+        if: steps.validate_secrets.outputs.can_publish != 'true'
+        run: echo "Skipping mac release publish because required Apple signing/notarization secrets are not configured."

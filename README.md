@@ -85,6 +85,7 @@ Windows auto-update notes:
 - Push the same tag to publish both Windows and Mac assets under one GitHub Release.
 - macOS auto-update requires a signed and notarized release build that publishes both `.dmg` and `.zip`.
 - Configure these GitHub secrets for the mac release workflow: `MAC_CERTIFICATE_P12_BASE64`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
+- If those secrets are missing, the GitHub mac release workflow now skips publishing instead of failing the whole release.
 - `npm run desktop:dist:mac` remains an unsigned local test build. Use the signed GitHub release build to test in-app updater behavior on your Mac.
 - In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
 - `bash scripts/release-update.sh` defaults to a patch release, must be run on `main`, stages all current changes, commits, tags, and pushes in one command.
