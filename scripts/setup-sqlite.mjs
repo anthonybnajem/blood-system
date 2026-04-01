@@ -3,7 +3,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import bcrypt from "bcryptjs";
 
 const DEFAULT_DB_PATH = "data/app.sqlite";
 const schemaPathConfig = (process.env.SQLITE_SCHEMA_PATH || "sql/sqlite-schema.sql").trim();
@@ -27,21 +26,21 @@ const defaults = [
     name: "Starter Admin",
     email: "admin@starter.local",
     role: "admin",
-    password: "admin123",
+    passwordHash: "$2b$10$sFsZYror4KSMxndRAArUYOMudyMx8q5ZSnbMPmytpXT1PS9P9wQDC",
   },
   {
     id: "emp_manager",
     name: "Starter Manager",
     email: "manager@starter.local",
     role: "manager",
-    password: "manager123",
+    passwordHash: "$2b$10$wHXFPnwnPv927fKL.nmJBOSALqHmoB37u/jW3UDNWFn.FTqCDNrC2",
   },
   {
     id: "emp_staff",
     name: "Starter Staff",
     email: "staff@starter.local",
     role: "staff",
-    password: "staff123",
+    passwordHash: "$2b$10$z45AEDTj1pkz9xOZ/KLyKeoBhzrd.HbWGdHYMFDvZ7O7tk2C3PafO",
   },
 ];
 
@@ -111,13 +110,12 @@ try {
   };
 
   for (const employee of defaults) {
-    const passwordHash = await bcrypt.hash(employee.password, 10);
     insertStatement.run(
       employee.id,
       employee.name,
       employee.email,
       employee.role,
-      passwordHash,
+      employee.passwordHash,
       now,
       now
     );
@@ -127,7 +125,7 @@ try {
       employee.name,
       employee.email.split("@")[0],
       employee.email,
-      passwordHash,
+      employee.passwordHash,
       toLabRole(employee.role),
       now,
       now
