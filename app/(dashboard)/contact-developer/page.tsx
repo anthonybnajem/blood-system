@@ -11,6 +11,7 @@ const contactChannels = [
   //   label: "Email",
   //   value: "anthonybounajem@gmail.com",
   // },
+  //
 ];
 
 export default function ContactDeveloperPage() {

@@ -106,6 +106,8 @@ function ensureReferenceRangeColumns(db: DatabaseSync) {
     ).map((c) => c.name)
   );
 
+
+  
   if (!existingColumns.has("normal_low")) {
     db.exec("ALTER TABLE reference_ranges ADD COLUMN normal_low REAL;");
   }
