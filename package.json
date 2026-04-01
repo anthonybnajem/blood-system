@@ -23,7 +23,8 @@
     "desktop:bundle": "npm run build && node scripts/prepare-desktop-bundle.mjs",
     "desktop:dist:win": "npm run desktop:bundle && electron-builder --win nsis --x64 --config electron-builder.json",
     "desktop:dist:win:release": "node scripts/build-desktop-release.mjs --win",
-    "desktop:dist:mac": "npm run desktop:bundle && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --config electron-builder.json"
+    "desktop:dist:mac": "npm run desktop:bundle && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --config electron-builder.json",
+    "desktop:dist:mac:release": "node scripts/build-desktop-release.mjs --mac"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

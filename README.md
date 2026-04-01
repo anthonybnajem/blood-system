@@ -65,12 +65,18 @@ Desktop mode is now wired with Electron main/preload processes and secure IPC.
    - `npm run desktop:dist:win`
 5. Build a Windows installer for GitHub Releases:
    - `GITHUB_REPOSITORY=anthonybnajem/blood-system npm run desktop:dist:win:release`
+6. Build a Mac installer for local testing:
+   - `npm run desktop:dist:mac`
+7. Build a Mac installer for GitHub Releases:
+   - `GITHUB_REPOSITORY=anthonybnajem/blood-system npm run desktop:dist:mac:release`
 
 Windows auto-update notes:
 
 - Release builds generated with `desktop:dist:win:release` target GitHub Releases.
-- Publish tagged releases from GitHub Actions with `.github/workflows/windows-release.yml`.
+- Release builds generated with `desktop:dist:mac:release` target the same GitHub Release for macOS.
+- Publish tagged releases from GitHub Actions with `.github/workflows/windows-release.yml` and `.github/workflows/mac-release.yml`.
 - Push a tag such as `v0.1.0` to trigger the workflow and publish the Windows installer assets to the repo release.
+- Push the same tag to publish both Windows and Mac assets under one GitHub Release.
 - In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
 
 Files added for Electron runtime:
