@@ -48,14 +48,26 @@ const builderArgs =
 const publishMode = process.env.GH_TOKEN ? "always" : "never";
 builderArgs.push("--publish", publishMode);
 
-const builderEnv =
-  target === "mac"
-    ? { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: "false" }
-    : process.env;
+if (target === "mac" && publishMode === "always") {
+  const missing = [
+    "CSC_LINK",
+    "CSC_KEY_PASSWORD",
+    "APPLE_ID",
+    "APPLE_APP_SPECIFIC_PASSWORD",
+    "APPLE_TEAM_ID",
+  ].filter((name) => !String(process.env[name] || "").trim());
+
+  if (missing.length > 0) {
+    console.error(
+      `Missing required mac release signing/notarization environment variables: ${missing.join(", ")}`
+    );
+    process.exit(1);
+  }
+}
 
 const builderResult = spawnSync("npx", builderArgs, {
   cwd: root,
-  env: builderEnv,
+  env: process.env,
   stdio: "inherit",
   shell: process.platform === "win32",
 });

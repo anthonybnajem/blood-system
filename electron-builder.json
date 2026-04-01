@@ -36,7 +36,11 @@
       }
     ],
     "artifactName": "${productName}-${version}-${arch}.${ext}",
-    "category": "public.app-category.medical"
+    "category": "public.app-category.medical",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist"
   },
   "nsis": {
     "oneClick": false,

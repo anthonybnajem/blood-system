@@ -69,6 +69,7 @@ Desktop mode is now wired with Electron main/preload processes and secure IPC.
    - `npm run desktop:dist:mac`
 7. Build a Mac installer for GitHub Releases:
    - `GITHUB_REPOSITORY=anthonybnajem/blood-system npm run desktop:dist:mac:release`
+   - Requires mac signing/notarization environment variables for updater-compatible builds.
 8. Create and publish a new desktop update version automatically:
    - `bash scripts/release-update.sh`
    - `npm run release:patch`
@@ -82,6 +83,9 @@ Windows auto-update notes:
 - Publish tagged releases from GitHub Actions with `.github/workflows/windows-release.yml` and `.github/workflows/mac-release.yml`.
 - Push a tag such as `v0.1.0` to trigger the workflow and publish the Windows installer assets to the repo release.
 - Push the same tag to publish both Windows and Mac assets under one GitHub Release.
+- macOS auto-update requires a signed and notarized release build that publishes both `.dmg` and `.zip`.
+- Configure these GitHub secrets for the mac release workflow: `MAC_CERTIFICATE_P12_BASE64`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
+- `npm run desktop:dist:mac` remains an unsigned local test build. Use the signed GitHub release build to test in-app updater behavior on your Mac.
 - In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
 - `bash scripts/release-update.sh` defaults to a patch release, must be run on `main`, stages all current changes, commits, tags, and pushes in one command.
 
