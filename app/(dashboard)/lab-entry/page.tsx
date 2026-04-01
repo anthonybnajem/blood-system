@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PatientIntakePanel } from "@/components/lab/patient-intake-panel";
 import { useToast } from "@/components/ui/use-toast";
+import { formatPatientDobInput, normalizePatientDobForStorage } from "@/lib/patient-dob";
+import { getYupFieldErrors, labInputSchema, patientRequiredSchema } from "@/lib/yup-validation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -219,24 +221,6 @@ function buildPatientFullName(input: {
     .map((part) => String(part || "").trim())
     .filter(Boolean);
   return parts.join(" ").trim() || String(input.fullName || "").trim();
-}
-
-function getMissingRequiredPatientFields(input: {
-  firstName?: string | null;
-  lastName?: string | null;
-  gender?: "Male" | "Female" | "Other" | "Unknown";
-  dateOfBirth?: string | null;
-  phone?: string | null;
-  location?: string | null;
-}) {
-  const missing: string[] = [];
-  if (!String(input.firstName || "").trim()) missing.push("First Name");
-  if (!String(input.lastName || "").trim()) missing.push("Last Name");
-  if ((input.gender || "Unknown") === "Unknown") missing.push("Gender");
-  if (!String(input.dateOfBirth || "").trim()) missing.push("Date Of Birth");
-  if (!String(input.phone || "").trim()) missing.push("Phone");
-  if (!String(input.location || "").trim()) missing.push("Location");
-  return missing;
 }
 
 function pad2(value: number): string {
@@ -548,6 +532,7 @@ function buildPrintableReportHtml(report: PrintableLabReport): string {
 }
 
 export default function LabEntryPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const handledCreateVisitQueryRef = useRef("");
@@ -576,6 +561,9 @@ export default function LabEntryPage() {
   const [patientSearch, setPatientSearch] = useState("");
   const [createPatientOpen, setCreatePatientOpen] = useState(false);
   const [editPatientOpen, setEditPatientOpen] = useState(false);
+  const [createPatientErrors, setCreatePatientErrors] = useState<Record<string, string>>({});
+  const [editPatientErrors, setEditPatientErrors] = useState<Record<string, string>>({});
+  const [newResultInputErrors, setNewResultInputErrors] = useState<Record<string, string>>({});
   const [addResultInputOpen, setAddResultInputOpen] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [newPatient, setNewPatient] = useState({
@@ -699,71 +687,37 @@ export default function LabEntryPage() {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const createdVisit = await apiPost<{
-        visitId: string;
-        caseNo: string;
-      }>("/api/lab/visits", {
-        patientId: targetPatientId,
-      });
-
-      const formTemplate = await apiGet<Template>(
-        `/api/lab/form-template?patientId=${encodeURIComponent(targetPatientId)}`
-      );
-
-      setVisitId(createdVisit.visitId);
-      setCaseNo(createdVisit.caseNo);
-      setTemplate(formTemplate);
-      setResults({});
-      setTestQuery("");
-      setActiveDepartment(formTemplate[0]?.departmentId || "");
-      setCurrentStep("results");
-      await loadHistory(targetPatientId);
-
-      toast({
-        title: "New report created",
-        description: `Case ${createdVisit.caseNo} is ready for result entry.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Could not create report",
-        description: error?.message || "Failed to initialize lab report",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    router.push(
+      `/lab-entry/patients/${encodeURIComponent(targetPatientId)}/quick-report`
+    );
   };
 
   const createPatient = async () => {
     const fullName = buildPatientFullName(newPatient);
-    if (!fullName) {
-      toast({
-        title: "Patient name required",
-        description: "Please enter first and last name at minimum",
-        variant: "destructive",
-      });
-      return;
-    }
-    const missing = getMissingRequiredPatientFields(newPatient);
-    if (missing.length > 0) {
+    const nextFieldErrors = getYupFieldErrors(patientRequiredSchema, {
+      ...newPatient,
+      gender: newPatient.gender === "Unknown" ? undefined : newPatient.gender,
+    });
+    setCreatePatientErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
         title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
     }
 
     try {
+      setCreatePatientErrors({});
       const createdPatient = await apiPost<Patient>("/api/lab/patients", {
         fullName,
         firstName: newPatient.firstName,
         fatherName: newPatient.fatherName,
         lastName: newPatient.lastName,
         gender: newPatient.gender,
-        dateOfBirth: newPatient.dateOfBirth || null,
+        dateOfBirth: normalizePatientDobForStorage(newPatient.dateOfBirth) || null,
         phone: newPatient.phone || null,
         location: newPatient.location || null,
       });
@@ -805,7 +759,7 @@ export default function LabEntryPage() {
       fatherName: selectedPatient.fatherName || "",
       lastName: selectedPatient.lastName || "",
       gender: selectedPatient.gender,
-      dateOfBirth: selectedPatient.dateOfBirth || "",
+      dateOfBirth: formatPatientDobInput(selectedPatient.dateOfBirth),
       phone: selectedPatient.phone || "",
       location: selectedPatient.location || "",
     });
@@ -815,25 +769,23 @@ export default function LabEntryPage() {
   const savePatientChanges = async () => {
     if (!editPatient.patientId) return;
     const fullName = buildPatientFullName(editPatient);
-    if (!fullName) {
-      toast({
-        title: "Patient name required",
-        description: "Please enter first and last name at minimum",
-        variant: "destructive",
-      });
-      return;
-    }
-    const missing = getMissingRequiredPatientFields(editPatient);
-    if (missing.length > 0) {
+    const nextFieldErrors = getYupFieldErrors(patientRequiredSchema, {
+      ...editPatient,
+      gender: editPatient.gender === "Unknown" ? undefined : editPatient.gender,
+    });
+    setEditPatientErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
         title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
     }
 
     try {
+      setEditPatientErrors({});
       const updatedPatient = await apiPut<Patient>("/api/lab/patients", {
         patientId: editPatient.patientId,
         fullName,
@@ -841,7 +793,7 @@ export default function LabEntryPage() {
         fatherName: editPatient.fatherName,
         lastName: editPatient.lastName,
         gender: editPatient.gender,
-        dateOfBirth: editPatient.dateOfBirth || null,
+        dateOfBirth: normalizePatientDobForStorage(editPatient.dateOfBirth) || null,
         phone: editPatient.phone || null,
         location: editPatient.location || null,
       });
@@ -1267,6 +1219,12 @@ export default function LabEntryPage() {
     handledCreateVisitQueryRef.current = createVisitKey;
     void createVisitForm(patientIdFromQuery);
   }, [searchParams, selectedPatientId]);
+
+  const showCreatePatientFieldError = (name: string) =>
+    createPatientErrors[name] ? <p className="text-sm text-destructive">{createPatientErrors[name]}</p> : null;
+
+  const showEditPatientFieldError = (name: string) =>
+    editPatientErrors[name] ? <p className="text-sm text-destructive">{editPatientErrors[name]}</p> : null;
 
   return (
     <div className="space-y-6">
@@ -1705,7 +1663,9 @@ export default function LabEntryPage() {
                         fullName: buildPatientFullName({ ...prev, firstName: e.target.value }),
                       }))
                     }
+                    className={createPatientErrors.firstName ? "border-destructive" : undefined}
                   />
+                  {showCreatePatientFieldError("firstName")}
                 </div>
                 <div className="space-y-2">
                   <Label>Father name</Label>
@@ -1718,7 +1678,9 @@ export default function LabEntryPage() {
                         fullName: buildPatientFullName({ ...prev, fatherName: e.target.value }),
                       }))
                     }
+                    className={createPatientErrors.lastName ? "border-destructive" : undefined}
                   />
+                  {showCreatePatientFieldError("lastName")}
                 </div>
                 <div className="space-y-2">
                   <Label>Last name</Label>
@@ -1791,23 +1753,34 @@ export default function LabEntryPage() {
                         gender: e.target.value as "Male" | "Female" | "Other" | "Unknown",
                       }))
                     }
-                    className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
+                    className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${
+                      createPatientErrors.gender
+                        ? "border-destructive"
+                        : "border-slate-300/80 dark:border-slate-700/70"
+                    }`}
                   >
                     <option value="Unknown">Unknown</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                   </select>
+                  {showCreatePatientFieldError("gender")}
                 </div>
                 <div className="space-y-2">
                   <Label>Date of birth</Label>
                   <Input
-                    type="date"
                     value={newPatient.dateOfBirth}
                     onChange={(e) =>
-                      setNewPatient((prev) => ({ ...prev, dateOfBirth: e.target.value }))
+                      setNewPatient((prev) => ({
+                        ...prev,
+                        dateOfBirth: formatPatientDobInput(e.target.value),
+                      }))
                     }
+                    inputMode="numeric"
+                    placeholder="DD/MM/YYYY"
+                    className={createPatientErrors.dateOfBirth ? "border-destructive" : undefined}
                   />
+                  {showCreatePatientFieldError("dateOfBirth")}
                 </div>
                 <div className="space-y-2">
                   <Label>Phone</Label>
@@ -1816,7 +1789,9 @@ export default function LabEntryPage() {
                     onChange={(e) =>
                       setNewPatient((prev) => ({ ...prev, phone: e.target.value }))
                     }
+                    className={createPatientErrors.phone ? "border-destructive" : undefined}
                   />
+                  {showCreatePatientFieldError("phone")}
                 </div>
                 <div className="space-y-2">
                   <Label>Location</Label>
@@ -1825,7 +1800,9 @@ export default function LabEntryPage() {
                     onChange={(e) =>
                       setNewPatient((prev) => ({ ...prev, location: e.target.value }))
                     }
+                    className={createPatientErrors.location ? "border-destructive" : undefined}
                   />
+                  {showCreatePatientFieldError("location")}
                 </div>
               </div>
             </div>
@@ -1857,7 +1834,9 @@ export default function LabEntryPage() {
                     fullName: buildPatientFullName({ ...prev, firstName: e.target.value }),
                   }))
                 }
+                className={editPatientErrors.firstName ? "border-destructive" : undefined}
               />
+              {showEditPatientFieldError("firstName")}
             </div>
             <div className="space-y-2">
               <Label>Father name</Label>
@@ -1870,7 +1849,9 @@ export default function LabEntryPage() {
                     fullName: buildPatientFullName({ ...prev, fatherName: e.target.value }),
                   }))
                 }
+                className={editPatientErrors.lastName ? "border-destructive" : undefined}
               />
+              {showEditPatientFieldError("lastName")}
             </div>
             <div className="space-y-2">
               <Label>Last name</Label>
@@ -1904,23 +1885,34 @@ export default function LabEntryPage() {
                     gender: e.target.value as "Male" | "Female" | "Other" | "Unknown",
                   }))
                 }
-                className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
+                className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${
+                  editPatientErrors.gender
+                    ? "border-destructive"
+                    : "border-slate-300/80 dark:border-slate-700/70"
+                }`}
               >
                 <option value="Unknown">Unknown</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
               </select>
+              {showEditPatientFieldError("gender")}
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
               <Input
-                type="date"
                 value={editPatient.dateOfBirth}
                 onChange={(e) =>
-                  setEditPatient((prev) => ({ ...prev, dateOfBirth: e.target.value }))
+                  setEditPatient((prev) => ({
+                    ...prev,
+                    dateOfBirth: formatPatientDobInput(e.target.value),
+                  }))
                 }
+                inputMode="numeric"
+                placeholder="DD/MM/YYYY"
+                className={editPatientErrors.dateOfBirth ? "border-destructive" : undefined}
               />
+              {showEditPatientFieldError("dateOfBirth")}
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
@@ -1929,7 +1921,9 @@ export default function LabEntryPage() {
                 onChange={(e) =>
                   setEditPatient((prev) => ({ ...prev, phone: e.target.value }))
                 }
+                className={editPatientErrors.phone ? "border-destructive" : undefined}
               />
+              {showEditPatientFieldError("phone")}
             </div>
             <div className="space-y-2">
               <Label>Location</Label>
@@ -1938,7 +1932,9 @@ export default function LabEntryPage() {
                 onChange={(e) =>
                   setEditPatient((prev) => ({ ...prev, location: e.target.value }))
                 }
+                className={editPatientErrors.location ? "border-destructive" : undefined}
               />
+              {showEditPatientFieldError("location")}
             </div>
           </div>
           <DialogFooter>
@@ -1966,7 +1962,11 @@ export default function LabEntryPage() {
                 onChange={(e) =>
                   setNewResultInput((prev) => ({ ...prev, panelId: e.target.value }))
                 }
-                className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
+                className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${
+                  newResultInputErrors.panelId
+                    ? "border-destructive"
+                    : "border-slate-300/80 dark:border-slate-700/70"
+                }`}
               >
                 <option value="">Select panel</option>
                 {activeDepartmentPanels.map((p) => (
@@ -1975,6 +1975,9 @@ export default function LabEntryPage() {
                   </option>
                 ))}
               </select>
+              {newResultInputErrors.panelId ? (
+                <p className="text-sm text-destructive">{newResultInputErrors.panelId}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Input Name</Label>
@@ -1984,9 +1987,13 @@ export default function LabEntryPage() {
                   setNewResultInput((prev) => ({
                     ...prev,
                     displayName: e.target.value,
-                  }))
+                    }))
                 }
+                className={newResultInputErrors.displayName ? "border-destructive" : undefined}
               />
+              {newResultInputErrors.displayName ? (
+                <p className="text-sm text-destructive">{newResultInputErrors.displayName}</p>
+              ) : null}
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
@@ -2036,15 +2043,23 @@ export default function LabEntryPage() {
             </Button>
             <Button
               onClick={async () => {
-                if (!newResultInput.panelId || !newResultInput.displayName.trim()) {
+                const nextFieldErrors = getYupFieldErrors(labInputSchema, {
+                  panelId: newResultInput.panelId,
+                  displayName: newResultInput.displayName,
+                  resultType: newResultInput.resultType,
+                });
+                setNewResultInputErrors(nextFieldErrors);
+                const validationErrors = Object.values(nextFieldErrors);
+                if (validationErrors.length > 0) {
                   toast({
-                    title: "Missing fields",
-                    description: "Panel and input name are required.",
+                    title: "Required fields missing",
+                    description: validationErrors.join(", "),
                     variant: "destructive",
                   });
                   return;
                 }
                 try {
+                  setNewResultInputErrors({});
                   const created = await apiPost<{ testId: string }>("/api/lab/catalog", {
                     action: "create_test",
                     payload: {

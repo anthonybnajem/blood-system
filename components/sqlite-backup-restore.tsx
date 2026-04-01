@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -11,8 +11,21 @@ export function SqliteBackupRestore() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [lastDownloadedFileName, setLastDownloadedFileName] = useState("");
+  const [dbPath, setDbPath] = useState("");
+  const [backupDir, setBackupDir] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    void fetch("/api/admin/sqlite/info", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+        setDbPath(String(body?.data?.dbPath || ""));
+        setBackupDir(String(body?.data?.backupDir || ""));
+      })
+      .catch(() => {});
+  }, []);
 
   const handleBackup = async () => {
     setIsBackingUp(true);
@@ -122,7 +135,22 @@ export function SqliteBackupRestore() {
 
         <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
           <div>
-            Download location: your browser’s default download folder or the location chosen by the browser.
+            SQLite DB file:{" "}
+            <span className="font-medium break-all text-foreground">
+              {dbPath || "Loading..."}
+            </span>
+          </div>
+          <div className="mt-1">
+            Server backup folder:{" "}
+            <span className="font-medium break-all text-foreground">
+              {backupDir || "Loading..."}
+            </span>
+          </div>
+          <div className="mt-3">
+            Manual download: your browser downloads the backup file and either saves it to the browser’s default download folder or asks you to choose a location, depending on your browser settings.
+          </div>
+          <div>
+            You cannot force a download location from the app itself; the browser controls that.
           </div>
           <div className="mt-1">
             File name:{" "}

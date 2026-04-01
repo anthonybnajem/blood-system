@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getPatientDobValidationError, normalizePatientDobForStorage } from "@/lib/patient-dob";
 import {
   createPatient,
   findPotentialDuplicatePatients,
@@ -94,13 +95,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const dateOfBirth = normalizePatientDobForStorage(body.dateOfBirth ?? null);
+    const dobError = getPatientDobValidationError(dateOfBirth);
+    if (dobError) {
+      return NextResponse.json({ error: dobError }, { status: 400 });
+    }
+
     const created = createPatient({
       fullName: body.fullName,
       firstName: body.firstName ?? null,
       fatherName: body.fatherName ?? null,
       lastName: body.lastName ?? null,
       gender: body.gender,
-      dateOfBirth: body.dateOfBirth ?? null,
+      dateOfBirth: dateOfBirth || null,
       phone: body.phone ?? null,
       location: body.location ?? null,
       notes: body.notes ?? null,
@@ -131,6 +138,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "fullName is required" }, { status: 400 });
     }
 
+    const dateOfBirth = normalizePatientDobForStorage(body.dateOfBirth ?? null);
+    const dobError = getPatientDobValidationError(dateOfBirth);
+    if (dobError) {
+      return NextResponse.json({ error: dobError }, { status: 400 });
+    }
+
     const updated = updatePatient({
       patientId: body.patientId,
       fullName: body.fullName,
@@ -138,7 +151,7 @@ export async function PUT(request: NextRequest) {
       fatherName: body.fatherName ?? null,
       lastName: body.lastName ?? null,
       gender: body.gender,
-      dateOfBirth: body.dateOfBirth ?? null,
+      dateOfBirth: dateOfBirth || null,
       phone: body.phone ?? null,
       location: body.location ?? null,
       notes: body.notes ?? null,

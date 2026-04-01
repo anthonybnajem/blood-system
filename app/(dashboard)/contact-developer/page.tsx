@@ -7,10 +7,10 @@ const contactChannels = [
     label: "Phone / WhatsApp",
     value: "+961 76340017",
   },
-  {
-    label: "Email",
-    value: "anthonybounajem@gmail.com",
-  },
+  // {
+  //   label: "Email",
+  //   value: "anthonybounajem@gmail.com",
+  // },
 ];
 
 export default function ContactDeveloperPage() {

@@ -142,7 +142,7 @@ export function buildPrintableReportHtml(report: PrintableLabReport): string {
     <meta charset="utf-8" />
     <title>Lab Report ${escapeHtml(report.caseNo)}</title>
     <style>
-      :root { color-scheme: light; --report-ink: #26285f; }
+      :root { color-scheme: light; --report-ink: #000; }
       * { box-sizing: border-box; }
       body { margin: 0; background: #f3f1ec; color: var(--report-ink); font-family: "Times New Roman", Times, serif; }
       .print-shell { padding: 24px; }

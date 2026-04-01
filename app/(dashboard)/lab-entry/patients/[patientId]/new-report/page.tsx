@@ -17,6 +17,7 @@ import {
   formatDate,
   type PrintableLabReport,
 } from "@/lib/lab-print-report";
+import { getYupFieldErrors, reportDetailsSchema } from "@/lib/yup-validation";
 
 type Patient = {
   patientId: string;
@@ -104,22 +105,23 @@ export default function PatientNewReportPage() {
   const [initError, setInitError] = useState("");
   const [panelPage, setPanelPage] = useState(1);
   const [panelPageSize, setPanelPageSize] = useState(3);
-  const [currentStep, setCurrentStep] = useState<"patient" | "details" | "results">("patient");
+  const [reportFieldErrors, setReportFieldErrors] = useState<Record<string, string>>({});
 
-  const getMissingReportFields = () => {
-    const missing: string[] = [];
-    if (!caseNo.trim()) missing.push("Case No.");
-    if (!physicianName.trim()) missing.push("Ref / M.D.");
-    if (!visitDate.trim()) missing.push("Date & Time");
-    return missing;
-  };
+  const getReportValidationErrors = () =>
+    getYupFieldErrors(reportDetailsSchema, {
+      caseNo,
+      physicianName,
+      visitDate,
+    });
 
   const validateRequiredReportFields = () => {
-    const missing = getMissingReportFields();
-    if (missing.length > 0) {
+    const validationErrors = getReportValidationErrors();
+    setReportFieldErrors(validationErrors);
+    const errorMessages = Object.values(validationErrors);
+    if (errorMessages.length > 0) {
       toast({
         title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
+        description: errorMessages.join(", "),
         variant: "destructive",
       });
       return false;
@@ -127,13 +129,6 @@ export default function PatientNewReportPage() {
 
     return true;
   };
-
-  const stepItems = [
-    { id: "patient" as const, label: "Patient" },
-    { id: "details" as const, label: "Report Details" },
-    { id: "results" as const, label: "Results" },
-  ];
-  const currentStepIndex = stepItems.findIndex((step) => step.id === currentStep);
 
   const initializePage = async () => {
     if (!patientId) return;
@@ -302,6 +297,7 @@ export default function PatientNewReportPage() {
       if (!metadataResponse.ok) {
         throw new Error(metadataBody?.error || "Could not save report details");
       }
+      setReportFieldErrors({});
 
       await apiPost("/api/lab/results", { visitId, entries });
       toast({
@@ -411,139 +407,6 @@ export default function PatientNewReportPage() {
       ) : (
         <>
           <Card className="border-slate-200/80 dark:border-slate-800">
-            <CardContent className="pt-6">
-              <div className="grid gap-3 md:grid-cols-3">
-                {stepItems.map((step, index) => {
-                  const isActive = step.id === currentStep;
-                  const isDone =
-                    index < currentStepIndex || (step.id === "details" && getMissingReportFields().length === 0 && currentStep === "results");
-                  return (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => {
-                        if (step.id === "results" && getMissingReportFields().length > 0) return;
-                        setCurrentStep(step.id);
-                      }}
-                      className={`rounded-xl border px-4 py-3 text-left transition ${
-                        isActive
-                          ? "border-primary bg-primary/10"
-                          : isDone
-                            ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/20"
-                            : "border-slate-200/80 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/30"
-                      }`}
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Step {index + 1}
-                      </div>
-                      <div className="mt-1 text-sm font-semibold">{step.label}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {currentStep === "patient" ? (
-          <Card className="border-slate-200/80 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle>{patient?.fullName || "Patient"}</CardTitle>
-              <CardDescription>
-                Case {caseNo} {patient?.location ? `| ${patient.location}` : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Patient ID</div>
-                <div className="mt-1 text-sm">{patient?.patientId || "-"}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Gender</div>
-                <div className="mt-1 text-sm">{patient?.gender || "-"}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Date Of Birth</div>
-                <div className="mt-1 text-sm">{formatDate(patient?.dateOfBirth)}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Phone</div>
-                <div className="mt-1 text-sm">{patient?.phone || "-"}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Location</div>
-                <div className="mt-1 text-sm">{patient?.location || "-"}</div>
-              </div>
-              <div className="md:col-span-2 xl:col-span-4 flex justify-end">
-                <Button type="button" onClick={() => setCurrentStep("details")}>
-                  Continue To Report Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          ) : null}
-
-          {currentStep === "details" ? (
-          <Card className="border-slate-200/80 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle>Report Details</CardTitle>
-              <CardDescription>
-                Edit the fields shown in the report details header before printing.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="case-no">Case No.</Label>
-                <Input id="case-no" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="physician-name">Ref / M.D.</Label>
-                <Input
-                  id="physician-name"
-                  value={physicianName}
-                  onChange={(e) => setPhysicianName(e.target.value)}
-                  placeholder="Dr. M. Farah"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="branch">Branch / Source</Label>
-                <Input
-                  id="branch"
-                  value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
-                  placeholder="Main Lab"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="visit-date">Date &amp; Time</Label>
-                <Input
-                  id="visit-date"
-                  type="datetime-local"
-                  value={visitDate ? new Date(visitDate).toISOString().slice(0, 16) : ""}
-                  onChange={(e) =>
-                    setVisitDate(e.target.value ? new Date(e.target.value).toISOString() : "")
-                  }
-                />
-              </div>
-              <div className="md:col-span-2 xl:col-span-4 flex flex-wrap justify-between gap-3">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep("patient")}>
-                  Back To Patient
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (!validateRequiredReportFields()) return;
-                    setCurrentStep("results");
-                  }}
-                >
-                  Continue To Results
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          ) : null}
-
-          {currentStep === "results" ? (
-          <Card className="border-slate-200/80 dark:border-slate-800">
             <CardHeader>
               <CardTitle>Result Entry</CardTitle>
               <CardDescription>
@@ -551,10 +414,54 @@ export default function PatientNewReportPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {Object.keys(reportFieldErrors).length > 0 ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  Please complete the required report details before saving or printing.
+                </div>
+              ) : null}
               <div className="text-sm text-muted-foreground">
                 Case: <span className="font-medium text-foreground">{caseNo}</span> | Report ID:{" "}
                 <span className="font-medium text-foreground">{visitId}</span> | Filled:{" "}
                 <span className="font-medium text-foreground">{filledInputs}/{totalInputs}</span>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="case-no">Case No.</Label>
+                  <Input id="case-no" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} className={reportFieldErrors.caseNo ? "border-destructive" : undefined} />
+                  {reportFieldErrors.caseNo ? <p className="text-sm text-destructive">{reportFieldErrors.caseNo}</p> : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="physician-name">Ref / M.D.</Label>
+                  <Input
+                    id="physician-name"
+                    value={physicianName}
+                    onChange={(e) => setPhysicianName(e.target.value)}
+                    placeholder="Dr. M. Farah"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch">Branch / Source</Label>
+                  <Input
+                    id="branch"
+                    value={branch}
+                    onChange={(e) => setBranch(e.target.value)}
+                    placeholder="Main Lab"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="visit-date">Date &amp; Time</Label>
+                  <Input
+                    id="visit-date"
+                    type="datetime-local"
+                    value={visitDate ? new Date(visitDate).toISOString().slice(0, 16) : ""}
+                    onChange={(e) =>
+                      setVisitDate(e.target.value ? new Date(e.target.value).toISOString() : "")
+                    }
+                    className={reportFieldErrors.visitDate ? "border-destructive" : undefined}
+                  />
+                  {reportFieldErrors.visitDate ? <p className="text-sm text-destructive">{reportFieldErrors.visitDate}</p> : null}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -675,9 +582,6 @@ export default function PatientNewReportPage() {
               </Tabs>
 
               <div className="flex flex-wrap gap-3">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep("details")}>
-                  Back To Report Details
-                </Button>
                 <Button onClick={() => void saveDraft()} disabled={isSaving || !visitId}>
                   {isSaving ? (
                     <>
@@ -711,7 +615,6 @@ export default function PatientNewReportPage() {
               </div>
             </CardContent>
           </Card>
-          ) : null}
         </>
       )}
     </div>

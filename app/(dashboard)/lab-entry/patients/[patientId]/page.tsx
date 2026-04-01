@@ -298,7 +298,7 @@ export default function LabEntryPatientPage() {
           onClick={() => {
             if (!patient) return;
             router.push(
-              `/lab-entry/patients/${encodeURIComponent(patient.patientId)}/new-report`
+              `/lab-entry/patients/${encodeURIComponent(patient.patientId)}/quick-report`
             );
           }}
         >

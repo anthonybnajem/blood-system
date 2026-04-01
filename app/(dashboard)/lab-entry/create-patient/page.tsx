@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { formatPatientDobInput, normalizePatientDobForStorage } from "@/lib/patient-dob";
+import { getYupFieldErrors, patientRequiredSchema } from "@/lib/yup-validation";
 
 type Patient = {
   patientId: string;
@@ -87,6 +89,7 @@ export default function CreatePatientPage() {
   const [duplicateMatches, setDuplicateMatches] = useState<Patient[]>([]);
   const [duplicateLoading, setDuplicateLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [newPatient, setNewPatient] = useState({
     fullName: "",
     firstName: "",
@@ -150,27 +153,6 @@ export default function CreatePatientPage() {
     return merged;
   }, [duplicateMatches, similarFullNameMatches]);
 
-  const validateRequiredPatientFields = () => {
-    const missing: string[] = [];
-    if (!newPatient.firstName.trim()) missing.push("First Name");
-    if (!newPatient.lastName.trim()) missing.push("Last Name");
-    if (!newPatient.dateOfBirth.trim()) missing.push("Date Of Birth");
-    if (!newPatient.phone.trim()) missing.push("Phone");
-    if (!newPatient.location.trim()) missing.push("Location");
-    if (newPatient.gender === "Unknown") missing.push("Gender");
-
-    if (missing.length > 0) {
-      toast({
-        title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    return true;
-  };
-
   useEffect(() => {
     const firstName = newPatient.firstName.trim();
     const fatherName = newPatient.fatherName.trim();
@@ -199,25 +181,31 @@ export default function CreatePatientPage() {
   }, [newPatient.firstName, newPatient.fatherName, newPatient.lastName]);
 
   const createPatient = async (goToReport = false) => {
-    if (!fullName) {
+    const nextFieldErrors = getYupFieldErrors(patientRequiredSchema, {
+      ...newPatient,
+      gender: newPatient.gender === "Unknown" ? undefined : newPatient.gender,
+    });
+    setFieldErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
-        title: "Patient name required",
-        description: "Please enter first and last name at minimum",
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
     }
-    if (!validateRequiredPatientFields()) return;
 
     setIsCreating(true);
     try {
+      setFieldErrors({});
       const createdPatient = await apiPost<Patient>("/api/lab/patients", {
         fullName,
         firstName: newPatient.firstName,
         fatherName: newPatient.fatherName,
         lastName: newPatient.lastName,
         gender: newPatient.gender,
-        dateOfBirth: newPatient.dateOfBirth || null,
+        dateOfBirth: normalizePatientDobForStorage(newPatient.dateOfBirth) || null,
         phone: newPatient.phone || null,
         location: newPatient.location || null,
       });
@@ -272,6 +260,11 @@ export default function CreatePatientPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {Object.keys(fieldErrors).length > 0 ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              Please complete the required fields below.
+            </div>
+          ) : null}
           <div className="rounded-lg border border-slate-200/80 p-4 dark:border-slate-800">
             <div className="mb-3">
               <div className="text-sm font-semibold">Identity</div>
@@ -291,7 +284,11 @@ export default function CreatePatientPage() {
                       fullName: buildPatientFullName({ ...prev, firstName: e.target.value }),
                     }))
                   }
+                  className={fieldErrors.firstName ? "border-destructive" : undefined}
                 />
+                {fieldErrors.firstName ? (
+                  <p className="text-sm text-destructive">{fieldErrors.firstName}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Father name</Label>
@@ -317,7 +314,11 @@ export default function CreatePatientPage() {
                       fullName: buildPatientFullName({ ...prev, lastName: e.target.value }),
                     }))
                   }
+                  className={fieldErrors.lastName ? "border-destructive" : undefined}
                 />
+                {fieldErrors.lastName ? (
+                  <p className="text-sm text-destructive">{fieldErrors.lastName}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -365,23 +366,38 @@ export default function CreatePatientPage() {
                       gender: e.target.value as "Male" | "Female" | "Other" | "Unknown",
                     }))
                   }
-                  className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
+                  className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${
+                    fieldErrors.gender
+                      ? "border-destructive"
+                      : "border-slate-300/80 dark:border-slate-700/70"
+                  }`}
                 >
                   <option value="Unknown">Unknown</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
+                {fieldErrors.gender ? (
+                  <p className="text-sm text-destructive">{fieldErrors.gender}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Date of birth</Label>
                 <Input
-                  type="date"
                   value={newPatient.dateOfBirth}
                   onChange={(e) =>
-                    setNewPatient((prev) => ({ ...prev, dateOfBirth: e.target.value }))
+                    setNewPatient((prev) => ({
+                      ...prev,
+                      dateOfBirth: formatPatientDobInput(e.target.value),
+                    }))
                   }
+                  inputMode="numeric"
+                  placeholder="DD/MM/YYYY"
+                  className={fieldErrors.dateOfBirth ? "border-destructive" : undefined}
                 />
+                {fieldErrors.dateOfBirth ? (
+                  <p className="text-sm text-destructive">{fieldErrors.dateOfBirth}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Phone</Label>
@@ -390,7 +406,11 @@ export default function CreatePatientPage() {
                   onChange={(e) =>
                     setNewPatient((prev) => ({ ...prev, phone: e.target.value }))
                   }
+                  className={fieldErrors.phone ? "border-destructive" : undefined}
                 />
+                {fieldErrors.phone ? (
+                  <p className="text-sm text-destructive">{fieldErrors.phone}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Location</Label>
@@ -399,7 +419,11 @@ export default function CreatePatientPage() {
                   onChange={(e) =>
                     setNewPatient((prev) => ({ ...prev, location: e.target.value }))
                   }
+                  className={fieldErrors.location ? "border-destructive" : undefined}
                 />
+                {fieldErrors.location ? (
+                  <p className="text-sm text-destructive">{fieldErrors.location}</p>
+                ) : null}
               </div>
             </div>
           </div>

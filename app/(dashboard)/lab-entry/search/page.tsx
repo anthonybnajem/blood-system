@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { formatPatientDobInput, normalizePatientDobForStorage } from "@/lib/patient-dob";
+import { getYupFieldErrors, patientRequiredSchema } from "@/lib/yup-validation";
 
 type Patient = {
   patientId: string;
@@ -108,24 +110,6 @@ function buildPatientFullName(input: {
   return parts.join(" ").trim() || String(input.fullName || "").trim();
 }
 
-function getMissingRequiredPatientFields(input: {
-  firstName?: string | null;
-  lastName?: string | null;
-  gender?: "Male" | "Female" | "Other" | "Unknown";
-  dateOfBirth?: string | null;
-  phone?: string | null;
-  location?: string | null;
-}) {
-  const missing: string[] = [];
-  if (!String(input.firstName || "").trim()) missing.push("First Name");
-  if (!String(input.lastName || "").trim()) missing.push("Last Name");
-  if ((input.gender || "Unknown") === "Unknown") missing.push("Gender");
-  if (!String(input.dateOfBirth || "").trim()) missing.push("Date Of Birth");
-  if (!String(input.phone || "").trim()) missing.push("Phone");
-  if (!String(input.location || "").trim()) missing.push("Location");
-  return missing;
-}
-
 const RECENT_PATIENT_IDS_KEY = "lab_entry_recent_patients";
 
 export default function LabEntrySearchPage() {
@@ -138,6 +122,8 @@ export default function LabEntrySearchPage() {
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [createPatientOpen, setCreatePatientOpen] = useState(false);
   const [editPatientOpen, setEditPatientOpen] = useState(false);
+  const [createPatientErrors, setCreatePatientErrors] = useState<Record<string, string>>({});
+  const [editPatientErrors, setEditPatientErrors] = useState<Record<string, string>>({});
   const [duplicateMatches, setDuplicateMatches] = useState<Patient[]>([]);
   const [duplicateLoading, setDuplicateLoading] = useState(false);
   const [duplicatePage, setDuplicatePage] = useState(1);
@@ -279,7 +265,7 @@ export default function LabEntrySearchPage() {
       fatherName: selectedPatient.fatherName || "",
       lastName: selectedPatient.lastName || "",
       gender: selectedPatient.gender,
-      dateOfBirth: selectedPatient.dateOfBirth || "",
+      dateOfBirth: formatPatientDobInput(selectedPatient.dateOfBirth),
       phone: selectedPatient.phone || "",
       location: selectedPatient.location || "",
     });
@@ -352,36 +338,34 @@ export default function LabEntrySearchPage() {
       title: "Starting new report",
       description: `Preparing a new report for ${patient.fullName}.`,
     });
-    router.push(`/lab-entry/patients/${encodeURIComponent(patient.patientId)}/new-report`);
+    router.push(`/lab-entry/patients/${encodeURIComponent(patient.patientId)}/quick-report`);
   };
 
   const createPatient = async () => {
     const fullName = buildPatientFullName(newPatient);
-    if (!fullName) {
-      toast({
-        title: "Patient name required",
-        description: "Please enter first and last name at minimum",
-        variant: "destructive",
-      });
-      return;
-    }
-    const missing = getMissingRequiredPatientFields(newPatient);
-    if (missing.length > 0) {
+    const nextFieldErrors = getYupFieldErrors(patientRequiredSchema, {
+      ...newPatient,
+      gender: newPatient.gender === "Unknown" ? undefined : newPatient.gender,
+    });
+    setCreatePatientErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
         title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
     }
     try {
+      setCreatePatientErrors({});
       const createdPatient = await apiPost<Patient>("/api/lab/patients", {
         fullName,
         firstName: newPatient.firstName,
         fatherName: newPatient.fatherName,
         lastName: newPatient.lastName,
         gender: newPatient.gender,
-        dateOfBirth: newPatient.dateOfBirth || null,
+        dateOfBirth: normalizePatientDobForStorage(newPatient.dateOfBirth) || null,
         phone: newPatient.phone || null,
         location: newPatient.location || null,
       });
@@ -416,24 +400,25 @@ export default function LabEntrySearchPage() {
 
   const savePatientChanges = async () => {
     const fullName = buildPatientFullName(editPatient);
-    if (!fullName || !editPatient.patientId) {
-      toast({
-        title: "Patient name required",
-        description: "Please enter first and last name at minimum",
-        variant: "destructive",
-      });
+    if (!editPatient.patientId) {
       return;
     }
-    const missing = getMissingRequiredPatientFields(editPatient);
-    if (missing.length > 0) {
+    const nextFieldErrors = getYupFieldErrors(patientRequiredSchema, {
+      ...editPatient,
+      gender: editPatient.gender === "Unknown" ? undefined : editPatient.gender,
+    });
+    setEditPatientErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
         title: "Required fields missing",
-        description: `Please fill: ${missing.join(", ")}`,
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
     }
     try {
+      setEditPatientErrors({});
       const updatedPatient = await apiPut<Patient>("/api/lab/patients", {
         patientId: editPatient.patientId,
         fullName,
@@ -441,7 +426,7 @@ export default function LabEntrySearchPage() {
         fatherName: editPatient.fatherName,
         lastName: editPatient.lastName,
         gender: editPatient.gender,
-        dateOfBirth: editPatient.dateOfBirth || null,
+        dateOfBirth: normalizePatientDobForStorage(editPatient.dateOfBirth) || null,
         phone: editPatient.phone || null,
         location: editPatient.location || null,
       });
@@ -546,7 +531,8 @@ export default function LabEntrySearchPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-2">
                 <Label>First name</Label>
-                <Input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value, fullName: buildPatientFullName({ ...prev, firstName: e.target.value }) }))} />
+                <Input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value, fullName: buildPatientFullName({ ...prev, firstName: e.target.value }) }))} className={createPatientErrors.firstName ? "border-destructive" : undefined} />
+                {createPatientErrors.firstName ? <p className="text-sm text-destructive">{createPatientErrors.firstName}</p> : null}
               </div>
               <div className="space-y-2">
                 <Label>Father name</Label>
@@ -554,7 +540,8 @@ export default function LabEntrySearchPage() {
               </div>
               <div className="space-y-2">
                 <Label>Last name</Label>
-                <Input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value, fullName: buildPatientFullName({ ...prev, lastName: e.target.value }) }))} />
+                <Input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value, fullName: buildPatientFullName({ ...prev, lastName: e.target.value }) }))} className={createPatientErrors.lastName ? "border-destructive" : undefined} />
+                {createPatientErrors.lastName ? <p className="text-sm text-destructive">{createPatientErrors.lastName}</p> : null}
               </div>
             </div>
 
@@ -595,24 +582,28 @@ export default function LabEntrySearchPage() {
               </div> */}
               <div className="space-y-2">
                 <Label>Gender</Label>
-                <select value={newPatient.gender} onChange={(e) => setNewPatient((prev) => ({ ...prev, gender: e.target.value as "Male" | "Female" | "Other" | "Unknown" }))} className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40">
+                <select value={newPatient.gender} onChange={(e) => setNewPatient((prev) => ({ ...prev, gender: e.target.value as "Male" | "Female" | "Other" | "Unknown" }))} className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${createPatientErrors.gender ? "border-destructive" : "border-slate-300/80 dark:border-slate-700/70"}`}>
                   <option value="Unknown">Unknown</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
+                {createPatientErrors.gender ? <p className="text-sm text-destructive">{createPatientErrors.gender}</p> : null}
               </div>
               <div className="space-y-2">
                 <Label>Date of birth</Label>
-                <Input type="date" value={newPatient.dateOfBirth} onChange={(e) => setNewPatient((prev) => ({ ...prev, dateOfBirth: e.target.value }))} />
+                <Input value={newPatient.dateOfBirth} onChange={(e) => setNewPatient((prev) => ({ ...prev, dateOfBirth: formatPatientDobInput(e.target.value) }))} inputMode="numeric" placeholder="DD/MM/YYYY" className={createPatientErrors.dateOfBirth ? "border-destructive" : undefined} />
+                {createPatientErrors.dateOfBirth ? <p className="text-sm text-destructive">{createPatientErrors.dateOfBirth}</p> : null}
               </div>
               <div className="space-y-2">
                 <Label>Phone</Label>
-                <Input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} />
+                <Input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} className={createPatientErrors.phone ? "border-destructive" : undefined} />
+                {createPatientErrors.phone ? <p className="text-sm text-destructive">{createPatientErrors.phone}</p> : null}
               </div>
               <div className="space-y-2">
                 <Label>Location</Label>
-                <Input value={newPatient.location} onChange={(e) => setNewPatient((prev) => ({ ...prev, location: e.target.value }))} />
+                <Input value={newPatient.location} onChange={(e) => setNewPatient((prev) => ({ ...prev, location: e.target.value }))} className={createPatientErrors.location ? "border-destructive" : undefined} />
+                {createPatientErrors.location ? <p className="text-sm text-destructive">{createPatientErrors.location}</p> : null}
               </div>
             </div>
           </div>
@@ -632,7 +623,8 @@ export default function LabEntrySearchPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-2">
               <Label>First name</Label>
-              <Input value={editPatient.firstName} onChange={(e) => setEditPatient((prev) => ({ ...prev, firstName: e.target.value, fullName: buildPatientFullName({ ...prev, firstName: e.target.value }) }))} />
+              <Input value={editPatient.firstName} onChange={(e) => setEditPatient((prev) => ({ ...prev, firstName: e.target.value, fullName: buildPatientFullName({ ...prev, firstName: e.target.value }) }))} className={editPatientErrors.firstName ? "border-destructive" : undefined} />
+              {editPatientErrors.firstName ? <p className="text-sm text-destructive">{editPatientErrors.firstName}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Father name</Label>
@@ -640,7 +632,8 @@ export default function LabEntrySearchPage() {
             </div>
             <div className="space-y-2">
               <Label>Last name</Label>
-              <Input value={editPatient.lastName} onChange={(e) => setEditPatient((prev) => ({ ...prev, lastName: e.target.value, fullName: buildPatientFullName({ ...prev, lastName: e.target.value }) }))} />
+              <Input value={editPatient.lastName} onChange={(e) => setEditPatient((prev) => ({ ...prev, lastName: e.target.value, fullName: buildPatientFullName({ ...prev, lastName: e.target.value }) }))} className={editPatientErrors.lastName ? "border-destructive" : undefined} />
+              {editPatientErrors.lastName ? <p className="text-sm text-destructive">{editPatientErrors.lastName}</p> : null}
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
@@ -650,24 +643,28 @@ export default function LabEntrySearchPage() {
             </div> */}
             <div className="space-y-2">
               <Label>Gender</Label>
-              <select value={editPatient.gender} onChange={(e) => setEditPatient((prev) => ({ ...prev, gender: e.target.value as "Male" | "Female" | "Other" | "Unknown" }))} className="h-9 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-2.5 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40">
+              <select value={editPatient.gender} onChange={(e) => setEditPatient((prev) => ({ ...prev, gender: e.target.value as "Male" | "Female" | "Other" | "Unknown" }))} className={`h-9 w-full rounded-md border bg-slate-50/90 px-2.5 text-sm shadow-sm dark:bg-slate-900/40 ${editPatientErrors.gender ? "border-destructive" : "border-slate-300/80 dark:border-slate-700/70"}`}>
                 <option value="Unknown">Unknown</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
               </select>
+              {editPatientErrors.gender ? <p className="text-sm text-destructive">{editPatientErrors.gender}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
-              <Input type="date" value={editPatient.dateOfBirth} onChange={(e) => setEditPatient((prev) => ({ ...prev, dateOfBirth: e.target.value }))} />
+              <Input value={editPatient.dateOfBirth} onChange={(e) => setEditPatient((prev) => ({ ...prev, dateOfBirth: formatPatientDobInput(e.target.value) }))} inputMode="numeric" placeholder="DD/MM/YYYY" className={editPatientErrors.dateOfBirth ? "border-destructive" : undefined} />
+              {editPatientErrors.dateOfBirth ? <p className="text-sm text-destructive">{editPatientErrors.dateOfBirth}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
-              <Input value={editPatient.phone} onChange={(e) => setEditPatient((prev) => ({ ...prev, phone: e.target.value }))} />
+              <Input value={editPatient.phone} onChange={(e) => setEditPatient((prev) => ({ ...prev, phone: e.target.value }))} className={editPatientErrors.phone ? "border-destructive" : undefined} />
+              {editPatientErrors.phone ? <p className="text-sm text-destructive">{editPatientErrors.phone}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Location</Label>
-              <Input value={editPatient.location} onChange={(e) => setEditPatient((prev) => ({ ...prev, location: e.target.value }))} />
+              <Input value={editPatient.location} onChange={(e) => setEditPatient((prev) => ({ ...prev, location: e.target.value }))} className={editPatientErrors.location ? "border-destructive" : undefined} />
+              {editPatientErrors.location ? <p className="text-sm text-destructive">{editPatientErrors.location}</p> : null}
             </div>
           </div>
           <DialogFooter>

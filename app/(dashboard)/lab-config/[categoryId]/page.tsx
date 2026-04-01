@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
+import { getYupFieldErrors, labInputSchema, panelSchema } from "@/lib/yup-validation";
 
 type Department = {
   departmentId: string;
@@ -46,6 +47,9 @@ type Panel = {
   panelId: string;
   departmentId: string;
   name: string;
+  ordering: number;
+  printIfEmpty: number;
+  active: number;
 };
 type LabTest = {
   testId: string;
@@ -116,6 +120,17 @@ export default function CategoryInputsPage() {
     normalHigh: "",
     active: true,
   });
+  const [panelDialog, setPanelDialog] = useState({
+    open: false,
+    mode: "create" as "create" | "edit",
+    panelId: "",
+    name: "",
+    ordering: 0,
+    printIfEmpty: false,
+    active: true,
+  });
+  const [panelErrors, setPanelErrors] = useState<Record<string, string>>({});
+  const [inputErrors, setInputErrors] = useState<Record<string, string>>({});
 
   const load = async () => {
     setIsLoading(true);
@@ -214,6 +229,32 @@ export default function CategoryInputsPage() {
     });
   };
 
+  const openCreatePanel = () => {
+    const nextOrdering =
+      categoryPanels.reduce((maxValue, panel) => Math.max(maxValue, panel.ordering), 0) + 1;
+    setPanelDialog({
+      open: true,
+      mode: "create",
+      panelId: "",
+      name: "",
+      ordering: nextOrdering,
+      printIfEmpty: false,
+      active: true,
+    });
+  };
+
+  const openEditPanel = (panel: Panel) => {
+    setPanelDialog({
+      open: true,
+      mode: "edit",
+      panelId: panel.panelId,
+      name: panel.name,
+      ordering: panel.ordering,
+      printIfEmpty: panel.printIfEmpty === 1,
+      active: panel.active === 1,
+    });
+  };
+
   const openEdit = (row: InputRow) => {
     setInputDialog({
       open: true,
@@ -232,9 +273,25 @@ export default function CategoryInputsPage() {
   };
 
   const saveInput = async () => {
+    const nextFieldErrors = getYupFieldErrors(labInputSchema, {
+      panelId: inputDialog.panelId,
+      displayName: inputDialog.displayName,
+      resultType: inputDialog.resultType,
+    });
+    setInputErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
+      toast({
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      setInputErrors({});
       if (inputDialog.mode === "create") {
-        if (!inputDialog.panelId || !inputDialog.displayName.trim()) return;
         const created = await callCatalogAction("create_test", {
           panelId: inputDialog.panelId,
           displayName: inputDialog.displayName,
@@ -292,6 +349,77 @@ export default function CategoryInputsPage() {
     }
   };
 
+  const savePanel = async () => {
+    const nextFieldErrors = getYupFieldErrors(panelSchema, {
+      name: panelDialog.name,
+      ordering: panelDialog.ordering,
+    });
+    setPanelErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
+      toast({
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const name = panelDialog.name.trim();
+
+    try {
+      setPanelErrors({});
+      if (panelDialog.mode === "create") {
+        await callCatalogAction("create_panel", {
+          departmentId: categoryId,
+          name,
+        });
+        toast({
+          title: "Panel created",
+          description: `${name} was added to this category.`,
+        });
+      } else {
+        await callCatalogAction("update_panel", {
+          panelId: panelDialog.panelId,
+          name,
+          ordering: panelDialog.ordering,
+          printIfEmpty: panelDialog.printIfEmpty,
+          active: panelDialog.active,
+        });
+        toast({
+          title: "Panel updated",
+          description: `${name} was updated.`,
+        });
+      }
+
+      setPanelDialog((prev) => ({ ...prev, open: false }));
+      await load();
+    } catch (error: any) {
+      toast({
+        title: panelDialog.mode === "create" ? "Create failed" : "Save failed",
+        description: error?.message || "Could not save panel",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deletePanel = async (panel: Panel) => {
+    try {
+      await callCatalogAction("delete_panel", { panelId: panel.panelId });
+      toast({
+        title: "Panel deleted",
+        description: `${panel.name} was removed.`,
+      });
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error?.message || "Could not delete panel",
+        variant: "destructive",
+      });
+    }
+  };
+
   const deleteInput = async (testId: string) => {
     try {
       await callCatalogAction("delete_test", { testId });
@@ -333,6 +461,84 @@ export default function CategoryInputsPage() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>Panels</CardTitle>
+              <CardDescription>
+                Create and manage panels inside this category before adding inputs.
+              </CardDescription>
+            </div>
+            <Button onClick={() => openCreatePanel()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Panel
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {categoryPanels.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No panels yet. Create one to start adding inputs.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Print Empty</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categoryPanels.map((panel) => (
+                  <TableRow key={panel.panelId}>
+                    <TableCell className="font-medium">{panel.name}</TableCell>
+                    <TableCell>{panel.ordering}</TableCell>
+                    <TableCell>{panel.printIfEmpty ? "yes" : "no"}</TableCell>
+                    <TableCell>
+                      <Badge variant={panel.active ? "default" : "secondary"}>
+                        {panel.active ? "active" : "hidden"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditPanel(panel)}>
+                          Edit
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive">
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete panel?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This removes the panel and all its inputs if no saved report data depends on them.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => void deletePanel(panel)}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -436,6 +642,76 @@ export default function CategoryInputsPage() {
       </Card>
 
       <Dialog
+        open={panelDialog.open}
+        onOpenChange={(open) => setPanelDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{panelDialog.mode === "create" ? "Create Panel" : "Edit Panel"}</DialogTitle>
+            <DialogDescription>
+              Configure the panel name, order, and visibility for this category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Panel Name</Label>
+              <Input
+                value={panelDialog.name}
+                onChange={(e) => setPanelDialog((prev) => ({ ...prev, name: e.target.value }))}
+                className={panelErrors.name ? "border-destructive" : undefined}
+              />
+              {panelErrors.name ? (
+                <p className="text-sm text-destructive">{panelErrors.name}</p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label>Order</Label>
+              <Input
+                type="number"
+                value={panelDialog.ordering}
+                onChange={(e) =>
+                  setPanelDialog((prev) => ({
+                    ...prev,
+                    ordering: Number(e.target.value || 0),
+                  }))
+                }
+                className={panelErrors.ordering ? "border-destructive" : undefined}
+              />
+              {panelErrors.ordering ? (
+                <p className="text-sm text-destructive">{panelErrors.ordering}</p>
+              ) : null}
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={panelDialog.printIfEmpty}
+                onChange={(e) =>
+                  setPanelDialog((prev) => ({ ...prev, printIfEmpty: e.target.checked }))
+                }
+              />
+              Print even when empty
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={panelDialog.active}
+                onChange={(e) =>
+                  setPanelDialog((prev) => ({ ...prev, active: e.target.checked }))
+                }
+              />
+              Active
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPanelDialog((prev) => ({ ...prev, open: false }))}>
+              Cancel
+            </Button>
+            <Button onClick={() => void savePanel()}>Save Panel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={inputDialog.open}
         onOpenChange={(open) => setInputDialog((p) => ({ ...p, open }))}
       >
@@ -452,7 +728,11 @@ export default function CategoryInputsPage() {
               <select
                 value={inputDialog.panelId}
                 onChange={(e) => setInputDialog((p) => ({ ...p, panelId: e.target.value }))}
-                className="h-10 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-3 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
+                className={`h-10 w-full rounded-md border bg-slate-50/90 px-3 text-sm shadow-sm dark:bg-slate-900/40 ${
+                  inputErrors.panelId
+                    ? "border-destructive"
+                    : "border-slate-300/80 dark:border-slate-700/70"
+                }`}
                 disabled={inputDialog.mode === "edit"}
               >
                 <option value="">Select panel</option>
@@ -462,6 +742,9 @@ export default function CategoryInputsPage() {
                   </option>
                 ))}
               </select>
+              {inputErrors.panelId ? (
+                <p className="text-sm text-destructive">{inputErrors.panelId}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Input Name</Label>
@@ -470,7 +753,11 @@ export default function CategoryInputsPage() {
                 onChange={(e) =>
                   setInputDialog((p) => ({ ...p, displayName: e.target.value }))
                 }
+                className={inputErrors.displayName ? "border-destructive" : undefined}
               />
+              {inputErrors.displayName ? (
+                <p className="text-sm text-destructive">{inputErrors.displayName}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Type</Label>

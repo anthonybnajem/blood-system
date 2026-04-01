@@ -42,6 +42,10 @@ export function getSqliteDbPath() {
   return resolveDbPath();
 }
 
+export function getSqliteBackupDirPath() {
+  return resolveBackupDirPath();
+}
+
 function resolveBackupDirPath() {
   const configuredPath = process.env.SQLITE_BACKUP_DIR?.trim() || DEFAULT_BACKUP_DIR;
   const absolutePath = path.isAbsolute(configuredPath)

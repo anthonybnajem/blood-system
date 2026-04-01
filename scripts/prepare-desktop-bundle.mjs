@@ -86,6 +86,10 @@ const bundledPkg = {
   private: true,
   dependencies: {
     ...(rootPkg.dependencies || {}),
+    "electron-updater":
+      rootPkg.dependencies?.["electron-updater"] ||
+      rootPkg.devDependencies?.["electron-updater"] ||
+      "^6.8.3",
   },
 };
 

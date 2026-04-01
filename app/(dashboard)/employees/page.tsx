@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
+import { employeeCreateSchema, getYupFieldErrors } from "@/lib/yup-validation";
 
 const DEFAULT_ROLE: Employee["role"] = "staff";
 
@@ -32,6 +33,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<Employee["role"]>(DEFAULT_ROLE);
   const [isActive, setIsActive] = useState(true);
   const [tableSearch, setTableSearch] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
@@ -73,10 +75,17 @@ export default function UsersPage() {
   };
 
   const createUser = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
+    const nextFieldErrors = getYupFieldErrors(employeeCreateSchema, {
+      name,
+      email,
+      password,
+    });
+    setFieldErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
       toast({
-        title: "Missing fields",
-        description: "Name, email, and password are required.",
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;
@@ -97,6 +106,7 @@ export default function UsersPage() {
 
     setSaving(true);
     try {
+      setFieldErrors({});
       const hashed = await hashPassword(password);
       await employeesApi.add({
         id: crypto.randomUUID(),
@@ -154,7 +164,8 @@ export default function UsersPage() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className={fieldErrors.name ? "border-destructive" : undefined} />
+            {fieldErrors.name ? <p className="text-sm text-destructive">{fieldErrors.name}</p> : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -163,7 +174,9 @@ export default function UsersPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className={fieldErrors.email ? "border-destructive" : undefined}
             />
+            {fieldErrors.email ? <p className="text-sm text-destructive">{fieldErrors.email}</p> : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
@@ -172,7 +185,9 @@ export default function UsersPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className={fieldErrors.password ? "border-destructive" : undefined}
             />
+            {fieldErrors.password ? <p className="text-sm text-destructive">{fieldErrors.password}</p> : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>

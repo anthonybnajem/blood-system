@@ -69,6 +69,11 @@ Desktop mode is now wired with Electron main/preload processes and secure IPC.
    - `npm run desktop:dist:mac`
 7. Build a Mac installer for GitHub Releases:
    - `GITHUB_REPOSITORY=anthonybnajem/blood-system npm run desktop:dist:mac:release`
+8. Create and publish a new desktop update version automatically:
+   - `bash scripts/release-update.sh`
+   - `npm run release:patch`
+   - `npm run release:minor`
+   - `npm run release:major`
 
 Windows auto-update notes:
 
@@ -78,6 +83,7 @@ Windows auto-update notes:
 - Push a tag such as `v0.1.0` to trigger the workflow and publish the Windows installer assets to the repo release.
 - Push the same tag to publish both Windows and Mac assets under one GitHub Release.
 - In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
+- `bash scripts/release-update.sh` defaults to a patch release, must be run on `main`, stages all current changes, commits, tags, and pushes in one command.
 
 Files added for Electron runtime:
 

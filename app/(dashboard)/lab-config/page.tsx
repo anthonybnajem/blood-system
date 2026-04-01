@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { categoryCreateSchema, categoryEditSchema, getYupFieldErrors } from "@/lib/yup-validation";
 
 type Department = {
   departmentId: string;
@@ -60,6 +61,8 @@ export default function LabConfigPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [createCategoryErrors, setCreateCategoryErrors] = useState<Record<string, string>>({});
+  const [editCategoryErrors, setEditCategoryErrors] = useState<Record<string, string>>({});
   const [tableSearch, setTableSearch] = useState("");
   const [editDialog, setEditDialog] = useState({
     open: false,
@@ -105,9 +108,20 @@ export default function LabConfigPage() {
 
   const createCategory = async () => {
     const name = newCategoryName.trim();
-    if (!name) return;
+    const nextFieldErrors = getYupFieldErrors(categoryCreateSchema, { name });
+    setCreateCategoryErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
+      toast({
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
+        variant: "destructive",
+      });
+      return;
+    }
     setIsCreating(true);
     try {
+      setCreateCategoryErrors({});
       await callCatalogAction("create_department", { name });
       setNewCategoryName("");
       await load();
@@ -123,7 +137,24 @@ export default function LabConfigPage() {
   };
 
   const saveCategory = async () => {
+    const nextFieldErrors = getYupFieldErrors(categoryEditSchema, {
+      departmentId: editDialog.departmentId,
+      name: editDialog.name,
+      ordering: editDialog.ordering,
+    });
+    setEditCategoryErrors(nextFieldErrors);
+    const validationErrors = Object.values(nextFieldErrors);
+    if (validationErrors.length > 0) {
+      toast({
+        title: "Required fields missing",
+        description: validationErrors.join(", "),
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      setEditCategoryErrors({});
       await callCatalogAction("update_department", {
         departmentId: editDialog.departmentId,
         name: editDialog.name,
@@ -184,7 +215,11 @@ export default function LabConfigPage() {
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               placeholder="e.g. Hematology"
+              className={createCategoryErrors.name ? "border-destructive" : undefined}
             />
+            {createCategoryErrors.name ? (
+              <p className="text-sm text-destructive">{createCategoryErrors.name}</p>
+            ) : null}
           </div>
           <Button onClick={() => void createCategory()} disabled={isCreating}>
             {isCreating ? (
@@ -298,7 +333,11 @@ export default function LabConfigPage() {
               <Input
                 value={editDialog.name}
                 onChange={(e) => setEditDialog((p) => ({ ...p, name: e.target.value }))}
+                className={editCategoryErrors.name ? "border-destructive" : undefined}
               />
+              {editCategoryErrors.name ? (
+                <p className="text-sm text-destructive">{editCategoryErrors.name}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Order</Label>
@@ -308,7 +347,11 @@ export default function LabConfigPage() {
                 onChange={(e) =>
                   setEditDialog((p) => ({ ...p, ordering: Number(e.target.value || 0) }))
                 }
+                className={editCategoryErrors.ordering ? "border-destructive" : undefined}
               />
+              {editCategoryErrors.ordering ? (
+                <p className="text-sm text-destructive">{editCategoryErrors.ordering}</p>
+              ) : null}
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input
