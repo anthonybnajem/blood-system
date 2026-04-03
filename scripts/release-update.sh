@@ -27,13 +27,6 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
   exit 1
 fi
 
-# Ensure GH_TOKEN exists
-if [[ -z "${GH_TOKEN:-}" ]]; then
-  echo "❌ GH_TOKEN is not set"
-  echo "Run: export GH_TOKEN=your_token"
-  exit 1
-fi
-
 # Get versions
 CURRENT_VERSION="$(node -p "require('./package.json').version")"
 NEW_VERSION="$(npm version "$LEVEL" --no-git-tag-version)"
@@ -49,23 +42,7 @@ git tag "$TAG"
 git push origin main
 git push origin "$TAG"
 
-echo "📦 Building Electron app..."
-
-# Clean previous builds
-rm -rf dist/
-
-# Build + publish (skip signing for speed)
-CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish always
-
-echo "✅ Build & publish completed"
-
-echo "🔎 Checking artifacts..."
-
-if [[ -f "dist/latest-mac.yml" ]]; then
-  echo "✔ latest-mac.yml exists"
-else
-  echo "❌ latest-mac.yml missing!"
-  exit 1
-fi
-
-echo "🎉 Release completed successfully: ${TAG}"
+echo "🚀 Release pushed: ${TAG}"
+echo "GitHub Actions will now build and publish:"
+echo "  - Windows Release"
+echo "  - Mac Release (only if Apple signing secrets are configured)"
