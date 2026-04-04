@@ -38,3 +38,6 @@ data/*.db
 
 # sqlite restore snapshots
 data/*.bak
+
+# local signing artifacts
+*.certSigningRequest
