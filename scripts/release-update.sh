@@ -10,6 +10,37 @@ usage() {
   exit 1
 }
 
+build_local_installers() {
+  local version="$1"
+  local desktop_dir="$HOME/Desktop"
+  local win_artifact="dist/release/Blood System-Setup-${version}.exe"
+  local mac_artifact="dist/release/Blood System-${version}-arm64.dmg"
+
+  echo "📦 Building local Windows installer..."
+  npm run desktop:dist:win
+
+  echo "📦 Building local macOS installer..."
+  npm run desktop:dist:mac
+
+  if [[ ! -f "$win_artifact" ]]; then
+    echo "❌ Windows installer not found: $win_artifact"
+    exit 1
+  fi
+
+  if [[ ! -f "$mac_artifact" ]]; then
+    echo "❌ macOS DMG not found: $mac_artifact"
+    exit 1
+  fi
+
+  mkdir -p "$desktop_dir"
+  cp "$win_artifact" "$desktop_dir/"
+  cp "$mac_artifact" "$desktop_dir/"
+
+  echo "📁 Copied installers to Desktop:"
+  echo "  - $desktop_dir/$(basename "$win_artifact")"
+  echo "  - $desktop_dir/$(basename "$mac_artifact")"
+}
+
 if [[ $# -gt 1 ]]; then
   usage
 fi
@@ -34,6 +65,8 @@ NEW_VERSION="${NEW_VERSION#v}"
 TAG="v${NEW_VERSION}"
 
 echo "🚀 Version bumped: ${CURRENT_VERSION} → ${NEW_VERSION}"
+
+build_local_installers "$NEW_VERSION"
 
 # Commit & push
 git add -A

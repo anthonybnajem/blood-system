@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
-  downloadDesktopUpdate,
   getDesktopUpdateState,
   installDesktopUpdate,
   isElectron,
@@ -40,7 +39,6 @@ export function DesktopUpdaterCard() {
   const [enabled, setEnabled] = useState(false);
   const [state, setState] = useState<DesktopUpdateState>(EMPTY_UPDATE_STATE);
   const [isChecking, setIsChecking] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     if (!isElectron()) {
@@ -60,9 +58,6 @@ export function DesktopUpdaterCard() {
       setState(value);
       if (value.status !== "checking") {
         setIsChecking(false);
-      }
-      if (value.status !== "downloading") {
-        setIsDownloading(false);
       }
     });
 
@@ -90,16 +85,6 @@ export function DesktopUpdaterCard() {
     }
   };
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    try {
-      const nextState = await downloadDesktopUpdate();
-      setState(nextState);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   const handleInstall = async () => {
     await installDesktopUpdate();
   };
@@ -110,8 +95,8 @@ export function DesktopUpdaterCard() {
         <div className="space-y-1">
           <CardTitle>Desktop Updates</CardTitle>
           <CardDescription>
-            Release builds published on GitHub Releases can be downloaded and installed directly
-            from this screen.
+            Release builds update in place. When a new version is found, it downloads in the
+            background and installs after restart.
           </CardDescription>
         </div>
         <Badge variant={state.status === "error" ? "destructive" : "outline"}>
@@ -150,7 +135,7 @@ export function DesktopUpdaterCard() {
             type="button"
             variant="outline"
             onClick={() => void handleCheck()}
-            disabled={isChecking || isDownloading}
+            disabled={isChecking || state.status === "downloading"}
           >
             {isChecking ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -159,17 +144,6 @@ export function DesktopUpdaterCard() {
             )}
             Check for Updates
           </Button>
-
-          {state.status === "available" ? (
-            <Button type="button" onClick={() => void handleDownload()} disabled={isDownloading}>
-              {isDownloading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              Download Update
-            </Button>
-          ) : null}
 
           {state.status === "downloaded" ? (
             <Button type="button" onClick={() => void handleInstall()}>

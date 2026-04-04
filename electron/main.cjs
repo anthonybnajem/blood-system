@@ -59,6 +59,15 @@ function getRuntimeGitHubRepo() {
   return { owner, repo };
 }
 
+function getGitHubReleaseBaseUrl(owner, repo, version) {
+  const normalizedVersion = String(version || "").trim().replace(/^v/i, "");
+  if (!owner || !repo || !normalizedVersion) {
+    return null;
+  }
+
+  return `https://github.com/${owner}/${repo}/releases/download/v${normalizedVersion}`;
+}
+
 function hasBundledUpdateConfig() {
   return fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
 }
@@ -93,7 +102,7 @@ function initializeUpdater() {
     return;
   }
 
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   if (runtimeFeedUrl) {
@@ -108,6 +117,20 @@ function initializeUpdater() {
       repo: runtimeGitHubRepo.repo,
       releaseType: "release",
     });
+
+    if (process.platform === "win32") {
+      const previousBlockmapBaseUrl = getGitHubReleaseBaseUrl(
+        runtimeGitHubRepo.owner,
+        runtimeGitHubRepo.repo,
+        app.getVersion()
+      );
+
+      if (previousBlockmapBaseUrl) {
+        autoUpdater.previousBlockmapBaseUrlOverride = previousBlockmapBaseUrl;
+      }
+
+      autoUpdater.disableWebInstaller = true;
+    }
   }
 
   autoUpdater.on("checking-for-update", () => {
@@ -124,11 +147,11 @@ function initializeUpdater() {
     setUpdateState({
       supported: true,
       configured: true,
-      status: "available",
-      message: `Version ${info.version} is available.`,
+      status: "downloading",
+      message: `Version ${info.version} is available. Downloading now...`,
       availableVersion: info.version || null,
       downloadedVersion: null,
-      progressPercent: null,
+      progressPercent: 0,
     });
   });
 
@@ -454,7 +477,7 @@ ipcMain.handle("electron:download-update", async () => {
 ipcMain.handle("electron:quit-and-install-update", () => {
   initializeUpdater();
   if (updateState.status === "downloaded") {
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(true, true);
     return true;
   }
   return false;
