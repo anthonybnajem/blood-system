@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkForUpdates: () => ipcRenderer.invoke("electron:check-for-updates"),
   downloadUpdate: () => ipcRenderer.invoke("electron:download-update"),
   quitAndInstallUpdate: () => ipcRenderer.invoke("electron:quit-and-install-update"),
+  getUninstallInfo: () => ipcRenderer.invoke("electron:get-uninstall-info"),
+  launchUninstaller: () => ipcRenderer.invoke("electron:launch-uninstaller"),
   onUpdateState: (listener) => {
     const wrappedListener = (_event, value) => listener(value);
     ipcRenderer.on("electron:update-state", wrappedListener);

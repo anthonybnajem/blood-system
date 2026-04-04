@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
@@ -104,6 +105,7 @@ function NavMain({ items }: { items: NavItem[] }) {
 }
 
 export function AppSidebar() {
+  const router = useRouter();
   const pathname = usePathname();
   const { state } = useSidebar();
   const { data: session } = useSession();
@@ -198,7 +200,14 @@ export function AppSidebar() {
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                  onClick={async () => {
+                    await signOut({
+                      redirect: false,
+                      callbackUrl: "/auth/signin",
+                    });
+                    router.replace("/auth/signin");
+                    router.refresh();
+                  }}
                   className="text-destructive cursor-pointer"
                 >
                   <LogOut className="mr-2 h-4 w-4" />

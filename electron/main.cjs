@@ -336,6 +336,38 @@ function injectBaseHref(html, baseUrl) {
   return `${baseTag}${html}`;
 }
 
+function findWindowsUninstallerPath() {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const installDir = path.dirname(process.execPath);
+  const preferredNames = [
+    `Uninstall ${app.getName()}.exe`,
+    "Uninstall Blood System.exe",
+    "Uninstall.exe",
+  ];
+
+  for (const name of preferredNames) {
+    const candidate = path.join(installDir, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  try {
+    const entries = fs.readdirSync(installDir);
+    const matched = entries.find((entry) => /^uninstall.*\.exe$/i.test(entry));
+    if (matched) {
+      return path.join(installDir, matched);
+    }
+  } catch (_error) {
+    return null;
+  }
+
+  return null;
+}
+
 function createWindow(startUrl) {
   const startOrigin = new URL(startUrl).origin;
 
@@ -481,6 +513,37 @@ ipcMain.handle("electron:quit-and-install-update", () => {
     return true;
   }
   return false;
+});
+ipcMain.handle("electron:get-uninstall-info", () => {
+  const userDataPath = app.getPath("userData");
+  return {
+    supported: process.platform === "win32" && app.isPackaged,
+    platform: process.platform,
+    userDataPath,
+    dataPath: path.join(userDataPath, "data"),
+    uninstallPath: findWindowsUninstallerPath(),
+  };
+});
+ipcMain.handle("electron:launch-uninstaller", async () => {
+  if (process.platform !== "win32" || !app.isPackaged) {
+    return false;
+  }
+
+  const uninstallPath = findWindowsUninstallerPath();
+  if (uninstallPath) {
+    const child = spawn(uninstallPath, [], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    setTimeout(() => {
+      app.quit();
+    }, 250);
+    return true;
+  }
+
+  await shell.openExternal("ms-settings:appsfeatures");
+  return true;
 });
 
 app.whenReady().then(async () => {

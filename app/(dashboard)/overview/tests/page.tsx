@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type TestRow = {
@@ -65,6 +66,23 @@ export default function OverviewTestsPage() {
     return tests.slice(start, start + pageSize);
   }, [tests, page, pageSize]);
 
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `tests-overview-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Tests",
+      rows: tests.map((test) => ({
+        Test: test.displayName,
+        Code: test.testCode,
+        Panel: test.panelName || "",
+        Type: test.resultType,
+        Unit: test.defaultUnit || "",
+        Status: test.active ? "active" : "hidden",
+        TestID: test.testId,
+        PanelID: test.panelId,
+      })),
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -73,12 +91,13 @@ export default function OverviewTestsPage() {
       </CardHeader>
       <CardContent>
         {error ? <div className="text-sm text-destructive">{error}</div> : null}
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tests..."
-          />
+        <DataTableToolbar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search tests..."
+          onExport={handleExport}
+          exportDisabled={!tests.length}
+        >
           <NativeSelect
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -103,7 +122,7 @@ export default function OverviewTestsPage() {
             <option value="asc">A-Z first</option>
             <option value="desc">Z-A first</option>
           </NativeSelect>
-        </div>
+        </DataTableToolbar>
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />

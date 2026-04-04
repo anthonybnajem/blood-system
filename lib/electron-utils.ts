@@ -46,6 +46,8 @@ declare global {
       checkForUpdates: () => Promise<DesktopUpdateState>;
       downloadUpdate: () => Promise<DesktopUpdateState>;
       quitAndInstallUpdate: () => Promise<boolean>;
+      getUninstallInfo: () => Promise<DesktopUninstallInfo>;
+      launchUninstaller: () => Promise<boolean>;
       onUpdateState: (
         listener: (state: DesktopUpdateState) => void
       ) => (() => void) | undefined;
@@ -202,4 +204,46 @@ export const subscribeToDesktopUpdateState = (
   }
 
   return window.electronAPI.onUpdateState(listener) || (() => {});
+};
+
+export type DesktopUninstallInfo = {
+  supported: boolean;
+  platform: string;
+  userDataPath: string;
+  dataPath: string;
+  uninstallPath: string | null;
+};
+
+const DEFAULT_UNINSTALL_INFO: DesktopUninstallInfo = {
+  supported: false,
+  platform: "unknown",
+  userDataPath: "",
+  dataPath: "",
+  uninstallPath: null,
+};
+
+export const getDesktopUninstallInfo = async (): Promise<DesktopUninstallInfo> => {
+  if (typeof window === "undefined" || !window.electronAPI?.getUninstallInfo) {
+    return DEFAULT_UNINSTALL_INFO;
+  }
+
+  try {
+    return await window.electronAPI.getUninstallInfo();
+  } catch (error) {
+    console.error("Failed to read desktop uninstall info:", error);
+    return DEFAULT_UNINSTALL_INFO;
+  }
+};
+
+export const launchDesktopUninstaller = async (): Promise<boolean> => {
+  if (typeof window === "undefined" || !window.electronAPI?.launchUninstaller) {
+    return false;
+  }
+
+  try {
+    return await window.electronAPI.launchUninstaller();
+  } catch (error) {
+    console.error("Failed to launch desktop uninstaller:", error);
+    return false;
+  }
 };

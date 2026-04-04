@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type ResultItem = {
@@ -84,6 +85,26 @@ export default function OverviewResultsPage() {
     return results.slice(start, start + pageSize);
   }, [results, page, pageSize]);
 
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `results-overview-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Results",
+      rows: results.map((result) => ({
+        Patient: result.patientName,
+        PatientID: result.patientId,
+        CaseNo: result.caseNo,
+        Test: result.testName,
+        TestCode: result.testCode,
+        Value: result.value,
+        Unit: result.unit || "",
+        Flag: result.abnormalFlag || "",
+        Updated: formatDateTime(result.updatedAt),
+        VisitID: result.visitId,
+        ResultID: result.resultId,
+      })),
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -92,12 +113,13 @@ export default function OverviewResultsPage() {
       </CardHeader>
       <CardContent>
         {error ? <div className="text-sm text-destructive">{error}</div> : null}
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search results..."
-          />
+        <DataTableToolbar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search results..."
+          onExport={handleExport}
+          exportDisabled={!results.length}
+        >
           <NativeSelect
             value={flag}
             onChange={(e) => setFlag(e.target.value)}
@@ -123,7 +145,7 @@ export default function OverviewResultsPage() {
             <option value="desc">Newest first</option>
             <option value="asc">Oldest / A-Z first</option>
           </NativeSelect>
-        </div>
+        </DataTableToolbar>
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />

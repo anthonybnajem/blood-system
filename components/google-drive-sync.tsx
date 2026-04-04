@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function GoogleDriveSync() {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -47,7 +49,12 @@ export function GoogleDriveSync() {
 
   const handleSignOut = async () => {
     try {
-      await signOut({ callbackUrl: window.location.href });
+      await signOut({
+        redirect: false,
+        callbackUrl: "/auth/signin",
+      });
+      router.replace("/auth/signin");
+      router.refresh();
       toast({
         title: "Signed Out",
         description: "You have been successfully signed out.",

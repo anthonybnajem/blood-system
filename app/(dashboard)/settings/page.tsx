@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LabSystemStatus } from "@/components/lab-system-status";
 import { LabSystemTools } from "@/components/lab-system-tools";
 import { SqliteBackupRestore } from "@/components/sqlite-backup-restore";
+import { DesktopUninstallCard } from "@/components/desktop-uninstall-card";
 import { DesktopUpdaterCard } from "@/components/desktop-updater-card";
 import { DEFAULT_APP_SETTINGS, settingsApi, type AppSettings } from "@/lib/db";
 import {
@@ -271,6 +272,7 @@ export default function SettingsPage() {
 
         <TabsContent value="general" className="space-y-4">
           <DesktopUpdaterCard />
+          <DesktopUninstallCard />
 
           <Card>
             <CardHeader>

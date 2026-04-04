@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type Visit = {
@@ -83,6 +84,23 @@ export default function OverviewReportsPage() {
     return reports.slice(start, start + pageSize);
   }, [reports, page, pageSize]);
 
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `reports-overview-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Reports",
+      rows: reports.map((report) => ({
+        Patient: report.patientName,
+        PatientID: report.patientId,
+        CaseNo: report.caseNo,
+        Reference: report.physicianName || report.branch || "",
+        VisitDate: formatDateTime(report.visitDate),
+        Status: report.status,
+        ReportCount: report.patientReportCount,
+        VisitID: report.visitId,
+      })),
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -91,12 +109,13 @@ export default function OverviewReportsPage() {
       </CardHeader>
       <CardContent>
         {error ? <div className="text-sm text-destructive">{error}</div> : null}
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search reports..."
-          />
+        <DataTableToolbar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search reports..."
+          onExport={handleExport}
+          exportDisabled={!reports.length}
+        >
           <NativeSelect
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -124,7 +143,7 @@ export default function OverviewReportsPage() {
             <option value="desc">Newest first</option>
             <option value="asc">Oldest / A-Z first</option>
           </NativeSelect>
-        </div>
+        </DataTableToolbar>
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -5,8 +5,11 @@ import { employeesApi, type Employee } from "@/lib/db";
 import { hashPassword } from "@/lib/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -17,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { employeeCreateSchema, getYupFieldErrors } from "@/lib/yup-validation";
 
 const DEFAULT_ROLE: Employee["role"] = "staff";
@@ -33,24 +37,57 @@ export default function UsersPage() {
   const [role, setRole] = useState<Employee["role"]>(DEFAULT_ROLE);
   const [isActive, setIsActive] = useState(true);
   const [tableSearch, setTableSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const sortedUsers = useMemo(
-    () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
-    [users]
-  );
 
   const filteredUsers = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
-    if (!query) return sortedUsers;
-    return sortedUsers.filter((user) => {
+    return users.filter((user) => {
       const status = user.isActive ? "active" : "inactive";
-      return [user.name, user.email, user.role, status]
+      const matchesStatus = !statusFilter || status === statusFilter;
+      const matchesQuery = !query || [user.name, user.email, user.role, status]
         .join(" ")
         .toLowerCase()
         .includes(query);
+      return matchesStatus && matchesQuery;
     });
-  }, [sortedUsers, tableSearch]);
+  }, [users, tableSearch, statusFilter]);
+
+  const sortedUsers = useMemo(() => {
+    const sorted = [...filteredUsers].sort((a, b) => {
+      let left = "";
+      let right = "";
+      if (sortBy === "email") {
+        left = a.email;
+        right = b.email;
+      } else if (sortBy === "role") {
+        left = a.role;
+        right = b.role;
+      } else if (sortBy === "status") {
+        left = a.isActive ? "active" : "inactive";
+        right = b.isActive ? "active" : "inactive";
+      } else {
+        left = a.name;
+        right = b.name;
+      }
+      const comparison = left.localeCompare(right);
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [filteredUsers, sortBy, sortOrder]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedUsers.slice(start, start + pageSize);
+  }, [sortedUsers, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tableSearch, statusFilter, sortBy, sortOrder]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -148,6 +185,24 @@ export default function UsersPage() {
     }
   };
 
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `users-overview-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Users",
+      rows: sortedUsers.map((user) => ({
+        Name: user.name,
+        Email: user.email,
+        Role: user.role,
+        Status: user.isActive ? "Active" : "Inactive",
+        HireDate:
+          user.hireDate instanceof Date
+            ? user.hireDate.toLocaleDateString("en-GB")
+            : new Date(user.hireDate).toLocaleDateString("en-GB"),
+        ID: user.id,
+      })),
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -223,12 +278,29 @@ export default function UsersPage() {
           <CardTitle>All Users</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input
-            value={tableSearch}
-            onChange={(e) => setTableSearch(e.target.value)}
-            placeholder="Search users..."
-            className="mb-4 max-w-sm"
-          />
+          <DataTableToolbar
+            searchValue={tableSearch}
+            onSearchChange={setTableSearch}
+            searchPlaceholder="Search users..."
+            onExport={handleExport}
+            exportDisabled={!sortedUsers.length}
+          >
+            <NativeSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </NativeSelect>
+            <NativeSelect value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">Sort by name</option>
+              <option value="email">Sort by email</option>
+              <option value="role">Sort by role</option>
+              <option value="status">Sort by status</option>
+            </NativeSelect>
+            <NativeSelect value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+              <option value="asc">A-Z first</option>
+              <option value="desc">Z-A first</option>
+            </NativeSelect>
+          </DataTableToolbar>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading users...</p>
           ) : (
@@ -250,7 +322,7 @@ export default function UsersPage() {
                     </TableCell>
                   </TableRow>
                 ) : null}
-                {filteredUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
@@ -270,6 +342,20 @@ export default function UsersPage() {
               </TableBody>
             </Table>
           )}
+          {!loading ? (
+            <DataPagination
+              page={page}
+              pageSize={pageSize}
+              totalItems={sortedUsers.length}
+              pageSizeOptions={[5, 10, 20, 50]}
+              itemLabel="users"
+              onPageChange={setPage}
+              onPageSizeChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+          ) : null}
         </CardContent>
       </Card>
     </div>

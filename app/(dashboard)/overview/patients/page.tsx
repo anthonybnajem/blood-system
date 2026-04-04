@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type Patient = {
@@ -76,6 +77,21 @@ export default function OverviewPatientsPage() {
     return patients.slice(start, start + pageSize);
   }, [patients, page, pageSize]);
 
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `patients-overview-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Patients",
+      rows: patients.map((patient) => ({
+        Name: patient.fullName,
+        Gender: patient.gender,
+        Phone: patient.phone || "",
+        Location: patient.location || "",
+        Updated: formatDateTime(patient.updatedAt),
+        PatientID: patient.patientId,
+      })),
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -84,12 +100,13 @@ export default function OverviewPatientsPage() {
       </CardHeader>
       <CardContent>
         {error ? <div className="text-sm text-destructive">{error}</div> : null}
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search patients..."
-          />
+        <DataTableToolbar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search patients..."
+          onExport={handleExport}
+          exportDisabled={!patients.length}
+        >
           <NativeSelect
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -106,7 +123,7 @@ export default function OverviewPatientsPage() {
             <option value="desc">Newest first</option>
             <option value="asc">Oldest / A-Z first</option>
           </NativeSelect>
-        </div>
+        </DataTableToolbar>
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
