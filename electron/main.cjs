@@ -36,6 +36,17 @@ function setUpdateState(patch) {
   broadcastUpdateState();
 }
 
+function markUpdateAsDownloaded(version) {
+  setUpdateState({
+    supported: true,
+    configured: true,
+    status: "downloaded",
+    message: "Update downloaded. Restart to install it.",
+    downloadedVersion: version || updateState.availableVersion,
+    progressPercent: 100,
+  });
+}
+
 function getRuntimeUpdateFeedUrl() {
   const rawUrl = process.env.AUTO_UPDATE_URL || process.env.DESKTOP_UPDATE_URL;
   if (!rawUrl) {
@@ -178,14 +189,7 @@ function initializeUpdater() {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    setUpdateState({
-      supported: true,
-      configured: true,
-      status: "downloaded",
-      message: "Update downloaded. Restart to install it.",
-      downloadedVersion: info.version || updateState.availableVersion,
-      progressPercent: 100,
-    });
+    markUpdateAsDownloaded(info.version);
   });
 
   autoUpdater.on("error", (error) => {
@@ -477,7 +481,22 @@ ipcMain.handle("electron:check-for-updates", async () => {
   }
 
   try {
-    await autoUpdater.checkForUpdates();
+    const result = await autoUpdater.checkForUpdates();
+    if (result?.downloadPromise) {
+      void result.downloadPromise
+        .then(() => {
+          if (updateState.status === "downloading") {
+            markUpdateAsDownloaded(result.updateInfo?.version);
+          }
+        })
+        .catch((error) => {
+          setUpdateState({
+            status: "error",
+            message: error?.message || "Could not download the update.",
+            progressPercent: null,
+          });
+        });
+    }
   } catch (error) {
     setUpdateState({
       status: "error",

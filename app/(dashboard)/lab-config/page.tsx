@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -34,6 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { categoryCreateSchema, categoryEditSchema, getYupFieldErrors } from "@/lib/yup-validation";
 
@@ -105,6 +107,19 @@ export default function LabConfigPage() {
         .includes(query);
     });
   }, [categories, tableSearch]);
+
+  const handleExport = () => {
+    exportRowsToExcel({
+      fileName: `lab-config-categories-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Categories",
+      rows: filteredCategories.map((category) => ({
+        Name: category.name,
+        Order: category.ordering,
+        Status: category.active ? "active" : "hidden",
+        DepartmentID: category.departmentId,
+      })),
+    });
+  };
 
   const createCategory = async () => {
     const name = newCategoryName.trim();
@@ -237,11 +252,12 @@ export default function LabConfigPage() {
           <CardTitle>Categories</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input
-            value={tableSearch}
-            onChange={(e) => setTableSearch(e.target.value)}
-            placeholder="Search categories..."
-            className="mb-4 max-w-sm"
+          <DataTableToolbar
+            searchValue={tableSearch}
+            onSearchChange={setTableSearch}
+            searchPlaceholder="Search categories..."
+            onExport={handleExport}
+            exportDisabled={!filteredCategories.length}
           />
           <Table>
             <TableHeader>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -36,6 +37,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { exportRowsToExcel } from "@/lib/excel-export";
 import { ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
 import { getYupFieldErrors, labInputSchema, panelSchema } from "@/lib/yup-validation";
 
@@ -92,6 +94,10 @@ async function callCatalogAction(action: string, payload?: Record<string, any>) 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || "Request failed");
   return body?.data;
+}
+
+function sanitizeExportName(value: string) {
+  return value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").trim() || "category";
 }
 
 export default function CategoryInputsPage() {
@@ -211,6 +217,41 @@ export default function CategoryInputsPage() {
         .includes(query);
     });
   }, [rows, tableSearch]);
+
+  const handlePanelsExport = () => {
+    exportRowsToExcel({
+      fileName: `${sanitizeExportName(category?.name || "category")}-panels-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Panels",
+      rows: categoryPanels.map((panel) => ({
+        Name: panel.name,
+        Order: panel.ordering,
+        PrintEmpty: panel.printIfEmpty ? "yes" : "no",
+        Status: panel.active ? "active" : "hidden",
+        PanelID: panel.panelId,
+        DepartmentID: panel.departmentId,
+      })),
+    });
+  };
+
+  const handleInputsExport = () => {
+    exportRowsToExcel({
+      fileName: `${sanitizeExportName(category?.name || "category")}-inputs-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Inputs",
+      rows: filteredRows.map((row) => ({
+        Panel: row.panelName,
+        InputName: row.displayName,
+        Type: row.resultType,
+        Unit: row.unit || "",
+        Range: row.rangeText || "",
+        Min: row.min ?? "",
+        Max: row.max ?? "",
+        Status: row.active ? "active" : "hidden",
+        TestID: row.testId,
+        PanelID: row.panelId,
+        RangeID: row.rangeId || "",
+      })),
+    });
+  };
 
   const openCreate = () => {
     setInputDialog({
@@ -483,59 +524,69 @@ export default function CategoryInputsPage() {
               No panels yet. Create one to start adding inputs.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Print Empty</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {categoryPanels.map((panel) => (
-                  <TableRow key={panel.panelId}>
-                    <TableCell className="font-medium">{panel.name}</TableCell>
-                    <TableCell>{panel.ordering}</TableCell>
-                    <TableCell>{panel.printIfEmpty ? "yes" : "no"}</TableCell>
-                    <TableCell>
-                      <Badge variant={panel.active ? "default" : "secondary"}>
-                        {panel.active ? "active" : "hidden"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openEditPanel(panel)}>
-                          Edit
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              Delete
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete panel?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This removes the panel and all its inputs if no saved report data depends on them.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => void deletePanel(panel)}>
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
+            <>
+              <DataTableToolbar
+                showSearch={false}
+                searchValue=""
+                onSearchChange={() => {}}
+                searchPlaceholder="Panels"
+                onExport={handlePanelsExport}
+                exportDisabled={!categoryPanels.length}
+              />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Print Empty</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {categoryPanels.map((panel) => (
+                    <TableRow key={panel.panelId}>
+                      <TableCell className="font-medium">{panel.name}</TableCell>
+                      <TableCell>{panel.ordering}</TableCell>
+                      <TableCell>{panel.printIfEmpty ? "yes" : "no"}</TableCell>
+                      <TableCell>
+                        <Badge variant={panel.active ? "default" : "secondary"}>
+                          {panel.active ? "active" : "hidden"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEditPanel(panel)}>
+                            Edit
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive">
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete panel?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes the panel and all its inputs if no saved report data depends on them.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => void deletePanel(panel)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
       </Card>
@@ -562,11 +613,12 @@ export default function CategoryInputsPage() {
             </p>
           ) : (
             <>
-              <Input
-                value={tableSearch}
-                onChange={(e) => setTableSearch(e.target.value)}
-                placeholder="Search inputs..."
-                className="mb-4 max-w-sm"
+              <DataTableToolbar
+                searchValue={tableSearch}
+                onSearchChange={setTableSearch}
+                searchPlaceholder="Search inputs..."
+                onExport={handleInputsExport}
+                exportDisabled={!filteredRows.length}
               />
               <Table>
                 <TableHeader>

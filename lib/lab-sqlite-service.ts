@@ -1,7 +1,10 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import JSZip from "jszip";
+import * as XLSX from "xlsx";
 import { getSqliteDb } from "./sqlite";
+import { buildPrintableReportHtml } from "./lab-print-report";
 
 export type DashboardOverview = {
   totals: {
@@ -201,6 +204,25 @@ export type LabSystemExport = {
 const nowIso = () => new Date().toISOString();
 const newId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 const LAB_SYSTEM_EXPORT_VERSION = "blood-system-export-v1" as const;
+
+function sanitizeFileSegment(value: string) {
+  return String(value || "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80) || "item";
+}
+
+function buildLabSystemWorkbook(exportData: LabSystemExport) {
+  const workbook = XLSX.utils.book_new();
+
+  for (const [sheetName, rows] of Object.entries(exportData.tables)) {
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeFileSegment(sheetName).slice(0, 31));
+  }
+
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
 
 function writeAuditLog(
   db: ReturnType<typeof getSqliteDb>,
@@ -2122,6 +2144,73 @@ export function exportLabSystemData(): LabSystemExport {
       tests: tables.tests.length,
     },
     tables,
+  };
+}
+
+export async function exportLabSystemArchive() {
+  const exportData = exportLabSystemData();
+  const zip = new JSZip();
+  const exportStamp = exportData.exportDate.replace(/[:.]/g, "-");
+
+  zip.file("manifest.json", JSON.stringify({
+    version: exportData.version,
+    exportDate: exportData.exportDate,
+    summary: exportData.summary,
+    contents: [
+      "raw-data/export.json",
+      "raw-data/all-tables.xlsx",
+      "patients/<patient>/patient.json",
+      "patients/<patient>/reports/<case>/report.json",
+      "patients/<patient>/reports/<case>/printable-report.html",
+    ],
+  }, null, 2));
+
+  zip.file("raw-data/export.json", JSON.stringify(exportData, null, 2));
+  zip.file("raw-data/all-tables.xlsx", buildLabSystemWorkbook(exportData));
+
+  const patientRows = exportData.tables.patients;
+  const visitRows = exportData.tables.visits;
+  const resultsRows = exportData.tables.results;
+
+  const patientsFolder = zip.folder("patients");
+
+  for (const patient of patientRows) {
+    const patientId = String(patient.patient_id || "");
+    const patientName = sanitizeFileSegment(String(patient.full_name || patientId || "patient"));
+    const patientFolder = patientsFolder?.folder(`${patientName}__${sanitizeFileSegment(patientId)}`);
+    if (!patientFolder) continue;
+
+    const patientVisits = visitRows.filter((visit) => String(visit.patient_id || "") === patientId);
+    const patientVisitIds = new Set(patientVisits.map((visit) => String(visit.visit_id || "")));
+    const patientResults = resultsRows.filter((result) =>
+      patientVisitIds.has(String(result.visit_id || ""))
+    );
+
+    patientFolder.file("patient.json", JSON.stringify({
+      patient,
+      visits: patientVisits,
+      results: patientResults,
+    }, null, 2));
+
+    const reportsFolder = patientFolder.folder("reports");
+
+    for (const visit of patientVisits) {
+      const visitId = String(visit.visit_id || "");
+      if (!visitId) continue;
+
+      const caseNo = sanitizeFileSegment(String(visit.case_no || visitId));
+      const reportFolder = reportsFolder?.folder(`${caseNo}__${sanitizeFileSegment(visitId)}`);
+      if (!reportFolder) continue;
+
+      const printableReport = getPrintableLabReport(visitId);
+      reportFolder.file("report.json", JSON.stringify(printableReport, null, 2));
+      reportFolder.file("printable-report.html", buildPrintableReportHtml(printableReport));
+    }
+  }
+
+  return {
+    fileName: `blood-system-export-${exportStamp}.zip`,
+    bytes: await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
   };
 }
 

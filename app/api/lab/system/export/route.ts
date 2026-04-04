@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { exportLabSystemData } from "@/lib/lab-sqlite-service";
+import { exportLabSystemArchive } from "@/lib/lab-sqlite-service";
 
 function canManage(role?: string) {
   return role === "admin" || role === "manager";
@@ -13,14 +13,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const data = exportLabSystemData();
-    const fileName = `blood-system-export-${new Date().toISOString().slice(0, 10)}.json`;
+    const archive = await exportLabSystemArchive();
 
-    return new NextResponse(JSON.stringify(data, null, 2), {
+    return new NextResponse(archive.bytes, {
       status: 200,
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename=\"${fileName}\"`,
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename=\"${archive.fileName}\"`,
         "Cache-Control": "no-store",
       },
     });

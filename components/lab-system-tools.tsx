@@ -84,7 +84,7 @@ export function LabSystemTools() {
       const disposition = response.headers.get("Content-Disposition");
       const fileName =
         disposition?.match(/filename="(.+)"/)?.[1] ||
-        `blood-system-export-${new Date().toISOString().slice(0, 10)}.json`;
+        `blood-system-export-${new Date().toISOString().slice(0, 10)}.zip`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -97,7 +97,7 @@ export function LabSystemTools() {
 
       toast({
         title: "Export complete",
-        description: "Blood system data export downloaded successfully.",
+        description: "Full blood system export package downloaded successfully.",
       });
     } catch (error: any) {
       toast({
@@ -193,7 +193,9 @@ export function LabSystemTools() {
           <DatabaseBackup className="h-4 w-4" />
           <AlertTitle>Use the right tool</AlertTitle>
           <AlertDescription>
-            JSON export/import is for blood system data transfer. SQLite backup/restore is the full database file backup.
+            Export creates a ZIP package with raw data, Excel sheets, and patient report files.
+            Import still uses the raw JSON blood system export format. SQLite backup/restore is the
+            full database file backup.
           </AlertDescription>
         </Alert>
 
@@ -237,7 +239,8 @@ export function LabSystemTools() {
           <div className="space-y-1">
             <h3 className="text-base font-semibold">Export Or Import Blood System Data</h3>
             <p className="text-sm text-muted-foreground">
-              Transfer employees, lab catalog, patients, reports, results, and report settings as a JSON file.
+              Export employees, lab catalog, patients, reports, results, and report settings as a
+              structured ZIP package with folders and detailed files.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type DataTableToolbarProps = {
+  showSearch?: boolean;
   searchValue: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder: string;
@@ -15,6 +16,7 @@ type DataTableToolbarProps = {
 };
 
 export function DataTableToolbar({
+  showSearch = true,
   searchValue,
   onSearchChange,
   searchPlaceholder,
@@ -25,12 +27,14 @@ export function DataTableToolbar({
 }: DataTableToolbarProps) {
   return (
     <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-      <Input
-        value={searchValue}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder={searchPlaceholder}
-        className="lg:max-w-sm"
-      />
+      {showSearch ? (
+        <Input
+          value={searchValue}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={searchPlaceholder}
+          className="lg:max-w-sm"
+        />
+      ) : null}
       <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:flex-wrap">
         {children}
         <Button
