@@ -85,6 +85,41 @@ const slug = (value: string) =>
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+function normalizeImportedDepartmentName(name: string) {
+  const cleanName = normalize(name);
+  const normalizedKey = cleanName.toLowerCase().replace(/\s+/g, " ");
+
+  if (normalizedKey === "vitamine d") {
+    return "Endocrine";
+  }
+
+  if (normalizedKey === "culture + atb" || normalizedKey === "culture+atb") {
+    return "Culture+ATB";
+  }
+
+  if (normalizedKey === "biochimie") {
+    return "Biochimie";
+  }
+
+  if (normalizedKey === "hematology") {
+    return "Hematology";
+  }
+
+  if (normalizedKey === "urine") {
+    return "Urine";
+  }
+
+  if (normalizedKey === "stool") {
+    return "Stool";
+  }
+
+  if (normalizedKey === "culture") {
+    return "Culture";
+  }
+
+  return cleanName;
+}
+
 function ensureDepartmentByName(name: string) {
   const db = getSqliteDb();
   const cleanName = normalize(name);
@@ -784,7 +819,7 @@ function importWorkbookAsCatalog(
 
   for (const sheetName of wb.SheetNames) {
     stats.sheets += 1;
-    const departmentId = ensureDepartmentByName(sheetName);
+    const departmentId = ensureDepartmentByName(normalizeImportedDepartmentName(sheetName));
     stats.departments += 1;
     let currentPanelId = ensurePanelByName(departmentId, "General");
     let lastTestId: string | null = null;

@@ -63,6 +63,7 @@ export default function LabConfigPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isImportingZgharta, setIsImportingZgharta] = useState(false);
   const [createCategoryErrors, setCreateCategoryErrors] = useState<Record<string, string>>({});
   const [editCategoryErrors, setEditCategoryErrors] = useState<Record<string, string>>({});
   const [tableSearch, setTableSearch] = useState("");
@@ -151,6 +152,34 @@ export default function LabConfigPage() {
     }
   };
 
+  const importCatalogExample = async () => {
+    setIsImportingZgharta(true);
+    try {
+      const result = await callCatalogAction("import_from_zgharta_form2");
+      await load();
+      const imported = result?.imported || {};
+      toast({
+        title: "Lab config imported",
+        description: [
+          imported.departments != null ? `${imported.departments} departments` : null,
+          imported.panels != null ? `${imported.panels} panels` : null,
+          imported.tests != null ? `${imported.tests} tests` : null,
+          imported.ranges != null ? `${imported.ranges} ranges` : null,
+        ]
+          .filter(Boolean)
+          .join(", "),
+      });
+    } catch (error: any) {
+      toast({
+        title: "Import failed",
+        description: error?.message || "Could not import lab config example.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImportingZgharta(false);
+    }
+  };
+
   const saveCategory = async () => {
     const nextFieldErrors = getYupFieldErrors(categoryEditSchema, {
       departmentId: editDialog.departmentId,
@@ -218,6 +247,35 @@ export default function LabConfigPage() {
           Refresh
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Seed Lab Config From Example Files</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              Import departments, panels, tests, and ranges from the bundled workbook examples in
+              `docs/`.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The bundled source is `Zgharta Form 2.xls`. It seeds `Hematology`, `Biochimie`,
+              `Endocrine`, `Urine`, `Stool`, `Culture`, and `Culture+ATB` with their panels and
+              input rows.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => void importCatalogExample()}
+            disabled={isImportingZgharta}
+          >
+            {isImportingZgharta ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Seed Lab Config From Example
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
