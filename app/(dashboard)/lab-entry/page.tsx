@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PatientDobInput } from "@/components/lab/patient-dob-input";
 import { PatientIntakePanel } from "@/components/lab/patient-intake-panel";
 import { useToast } from "@/components/ui/use-toast";
 import { openDesktopPrintPreview } from "@/lib/electron-utils";
@@ -1762,16 +1763,11 @@ export default function LabEntryPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Date of birth</Label>
-                  <Input
+                  <PatientDobInput
                     value={newPatient.dateOfBirth}
-                    onChange={(e) =>
-                      setNewPatient((prev) => ({
-                        ...prev,
-                        dateOfBirth: formatPatientDobInput(e.target.value),
-                      }))
+                    onChange={(value) =>
+                      setNewPatient((prev) => ({ ...prev, dateOfBirth: value }))
                     }
-                    inputMode="numeric"
-                    placeholder="DD/MM/YYYY"
                     className={createPatientErrors.dateOfBirth ? "border-destructive" : undefined}
                   />
                   {showCreatePatientFieldError("dateOfBirth")}
@@ -1894,16 +1890,11 @@ export default function LabEntryPage() {
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
-              <Input
+              <PatientDobInput
                 value={editPatient.dateOfBirth}
-                onChange={(e) =>
-                  setEditPatient((prev) => ({
-                    ...prev,
-                    dateOfBirth: formatPatientDobInput(e.target.value),
-                  }))
+                onChange={(value) =>
+                  setEditPatient((prev) => ({ ...prev, dateOfBirth: value }))
                 }
-                inputMode="numeric"
-                placeholder="DD/MM/YYYY"
                 className={editPatientErrors.dateOfBirth ? "border-destructive" : undefined}
               />
               {showEditPatientFieldError("dateOfBirth")}

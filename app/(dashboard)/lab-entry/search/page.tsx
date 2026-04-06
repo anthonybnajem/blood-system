@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileText, UserRound } from "lucide-react";
+import { PatientDobInput } from "@/components/lab/patient-dob-input";
 import { PatientIntakePanel } from "@/components/lab/patient-intake-panel";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
@@ -592,7 +593,13 @@ export default function LabEntrySearchPage() {
               </div>
               <div className="space-y-2">
                 <Label>Date of birth</Label>
-                <Input value={newPatient.dateOfBirth} onChange={(e) => setNewPatient((prev) => ({ ...prev, dateOfBirth: formatPatientDobInput(e.target.value) }))} inputMode="numeric" placeholder="DD/MM/YYYY" className={createPatientErrors.dateOfBirth ? "border-destructive" : undefined} />
+                <PatientDobInput
+                  value={newPatient.dateOfBirth}
+                  onChange={(value) =>
+                    setNewPatient((prev) => ({ ...prev, dateOfBirth: value }))
+                  }
+                  className={createPatientErrors.dateOfBirth ? "border-destructive" : undefined}
+                />
                 {createPatientErrors.dateOfBirth ? <p className="text-sm text-destructive">{createPatientErrors.dateOfBirth}</p> : null}
               </div>
               <div className="space-y-2">
@@ -653,7 +660,13 @@ export default function LabEntrySearchPage() {
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
-              <Input value={editPatient.dateOfBirth} onChange={(e) => setEditPatient((prev) => ({ ...prev, dateOfBirth: formatPatientDobInput(e.target.value) }))} inputMode="numeric" placeholder="DD/MM/YYYY" className={editPatientErrors.dateOfBirth ? "border-destructive" : undefined} />
+              <PatientDobInput
+                value={editPatient.dateOfBirth}
+                onChange={(value) =>
+                  setEditPatient((prev) => ({ ...prev, dateOfBirth: value }))
+                }
+                className={editPatientErrors.dateOfBirth ? "border-destructive" : undefined}
+              />
               {editPatientErrors.dateOfBirth ? <p className="text-sm text-destructive">{editPatientErrors.dateOfBirth}</p> : null}
             </div>
             <div className="space-y-2">

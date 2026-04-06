@@ -110,3 +110,23 @@ export function normalizePatientDobForStorage(value?: string | null): string {
 
   return raw;
 }
+
+export function patientDobToDate(value?: string | null): Date | undefined {
+  const normalized = normalizePatientDobForStorage(value);
+  if (!normalized) return undefined;
+
+  const parts = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!parts) return undefined;
+
+  const date = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+export function formatPatientDobFromDate(value?: Date): string {
+  if (!value || Number.isNaN(value.getTime())) return "";
+  const day = pad2(String(value.getDate()));
+  const month = pad2(String(value.getMonth() + 1));
+  const year = String(value.getFullYear()).padStart(4, "0");
+  return `${day}/${month}/${year}`;
+}

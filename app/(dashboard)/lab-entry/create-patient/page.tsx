@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileText, Loader2, UserPlus } from "lucide-react";
+import { PatientDobInput } from "@/components/lab/patient-dob-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { formatPatientDobInput, normalizePatientDobForStorage } from "@/lib/patient-dob";
+import { normalizePatientDobForStorage } from "@/lib/patient-dob";
 import { getYupFieldErrors, patientRequiredSchema } from "@/lib/yup-validation";
 
 type Patient = {
@@ -383,16 +384,11 @@ export default function CreatePatientPage() {
               </div>
               <div className="space-y-2">
                 <Label>Date of birth</Label>
-                <Input
+                <PatientDobInput
                   value={newPatient.dateOfBirth}
-                  onChange={(e) =>
-                    setNewPatient((prev) => ({
-                      ...prev,
-                      dateOfBirth: formatPatientDobInput(e.target.value),
-                    }))
+                  onChange={(value) =>
+                    setNewPatient((prev) => ({ ...prev, dateOfBirth: value }))
                   }
-                  inputMode="numeric"
-                  placeholder="DD/MM/YYYY"
                   className={fieldErrors.dateOfBirth ? "border-destructive" : undefined}
                 />
                 {fieldErrors.dateOfBirth ? (
