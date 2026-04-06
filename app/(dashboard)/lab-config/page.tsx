@@ -5,8 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -35,6 +37,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { exportRowsToExcel } from "@/lib/excel-export";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { categoryCreateSchema, categoryEditSchema, getYupFieldErrors } from "@/lib/yup-validation";
@@ -67,6 +70,11 @@ export default function LabConfigPage() {
   const [createCategoryErrors, setCreateCategoryErrors] = useState<Record<string, string>>({});
   const [editCategoryErrors, setEditCategoryErrors] = useState<Record<string, string>>({});
   const [tableSearch, setTableSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [editDialog, setEditDialog] = useState({
     open: false,
     departmentId: "",
@@ -99,15 +107,41 @@ export default function LabConfigPage() {
 
   const filteredCategories = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
-    if (!query) return categories;
     return categories.filter((category) => {
       const status = category.active ? "active" : "hidden";
+      if (statusFilter && status !== statusFilter) return false;
+      if (!query) return true;
       return [category.name, String(category.ordering), status]
         .join(" ")
         .toLowerCase()
         .includes(query);
     });
-  }, [categories, tableSearch]);
+  }, [categories, statusFilter, tableSearch]);
+
+  const sortedCategories = useMemo(() => {
+    return [...filteredCategories].sort((left, right) => {
+      let comparison = 0;
+      if (sortBy === "order") {
+        comparison = left.ordering - right.ordering;
+      } else if (sortBy === "status") {
+        const leftStatus = left.active ? "active" : "hidden";
+        const rightStatus = right.active ? "active" : "hidden";
+        comparison = leftStatus.localeCompare(rightStatus);
+      } else {
+        comparison = left.name.localeCompare(right.name);
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+  }, [filteredCategories, sortBy, sortOrder]);
+
+  const paginatedCategories = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedCategories.slice(start, start + pageSize);
+  }, [sortedCategories, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tableSearch, statusFilter, sortBy, sortOrder]);
 
   const handleExport = () => {
     exportRowsToExcel({
@@ -315,8 +349,23 @@ export default function LabConfigPage() {
             onSearchChange={setTableSearch}
             searchPlaceholder="Search categories..."
             onExport={handleExport}
-            exportDisabled={!filteredCategories.length}
-          />
+            exportDisabled={!sortedCategories.length}
+          >
+            <NativeSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="hidden">Hidden</option>
+            </NativeSelect>
+            <NativeSelect value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">Sort by name</option>
+              <option value="order">Sort by order</option>
+              <option value="status">Sort by status</option>
+            </NativeSelect>
+            <NativeSelect value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+              <option value="asc">A-Z first</option>
+              <option value="desc">Z-A first</option>
+            </NativeSelect>
+          </DataTableToolbar>
           <Table>
             <TableHeader>
               <TableRow>
@@ -327,14 +376,14 @@ export default function LabConfigPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCategories.length === 0 ? (
+              {sortedCategories.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No categories match your search.
                   </TableCell>
                 </TableRow>
               ) : null}
-              {filteredCategories.map((c) => (
+              {paginatedCategories.map((c) => (
                 <TableRow key={c.departmentId}>
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell>{c.ordering}</TableCell>
@@ -390,6 +439,18 @@ export default function LabConfigPage() {
               ))}
             </TableBody>
           </Table>
+          <DataPagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={sortedCategories.length}
+            pageSizeOptions={[5, 10, 20, 50]}
+            itemLabel="categories"
+            onPageChange={setPage}
+            onPageSizeChange={(value) => {
+              setPageSize(value);
+              setPage(1);
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -427,14 +488,14 @@ export default function LabConfigPage() {
                 <p className="text-sm text-destructive">{editCategoryErrors.ordering}</p>
               ) : null}
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-active"
                 checked={editDialog.active}
-                onChange={(e) => setEditDialog((p) => ({ ...p, active: e.target.checked }))}
+                onCheckedChange={(checked) => setEditDialog((p) => ({ ...p, active: checked === true }))}
               />
-              Active
-            </label>
+              <Label htmlFor="edit-active">Active</Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialog((p) => ({ ...p, open: false }))}>

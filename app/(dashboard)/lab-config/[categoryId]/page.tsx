@@ -6,8 +6,10 @@ import { useParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Table,
@@ -37,6 +39,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { exportRowsToExcel } from "@/lib/excel-export";
 import { ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
 import { getYupFieldErrors, labInputSchema, panelSchema } from "@/lib/yup-validation";
@@ -111,6 +114,19 @@ export default function CategoryInputsPage() {
   const [ranges, setRanges] = useState<Range[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tableSearch, setTableSearch] = useState("");
+  const [panelSearch, setPanelSearch] = useState("");
+  const [panelStatusFilter, setPanelStatusFilter] = useState("");
+  const [panelSortBy, setPanelSortBy] = useState("name");
+  const [panelSortOrder, setPanelSortOrder] = useState("asc");
+  const [panelPage, setPanelPage] = useState(1);
+  const [panelPageSize, setPanelPageSize] = useState(10);
+  const [inputStatusFilter, setInputStatusFilter] = useState("");
+  const [inputPanelFilter, setInputPanelFilter] = useState("");
+  const [inputTypeFilter, setInputTypeFilter] = useState("");
+  const [inputSortBy, setInputSortBy] = useState("displayName");
+  const [inputSortOrder, setInputSortOrder] = useState("asc");
+  const [inputPage, setInputPage] = useState(1);
+  const [inputPageSize, setInputPageSize] = useState(10);
 
   const [inputDialog, setInputDialog] = useState({
     open: false,
@@ -173,6 +189,40 @@ export default function CategoryInputsPage() {
     [panels, categoryId]
   );
 
+  const filteredPanels = useMemo(() => {
+    const query = panelSearch.trim().toLowerCase();
+    return categoryPanels.filter((panel) => {
+      const status = panel.active ? "active" : "hidden";
+      if (panelStatusFilter && status !== panelStatusFilter) return false;
+      if (!query) return true;
+      return [panel.name, String(panel.ordering), panel.printIfEmpty ? "yes" : "no", status]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [categoryPanels, panelSearch, panelStatusFilter]);
+
+  const sortedPanels = useMemo(() => {
+    return [...filteredPanels].sort((left, right) => {
+      let comparison = 0;
+      if (panelSortBy === "order") {
+        comparison = left.ordering - right.ordering;
+      } else if (panelSortBy === "status") {
+        const leftStatus = left.active ? "active" : "hidden";
+        const rightStatus = right.active ? "active" : "hidden";
+        comparison = leftStatus.localeCompare(rightStatus);
+      } else {
+        comparison = left.name.localeCompare(right.name);
+      }
+      return panelSortOrder === "asc" ? comparison : -comparison;
+    });
+  }, [filteredPanels, panelSortBy, panelSortOrder]);
+
+  const paginatedPanels = useMemo(() => {
+    const start = (panelPage - 1) * panelPageSize;
+    return sortedPanels.slice(start, start + panelPageSize);
+  }, [sortedPanels, panelPage, panelPageSize]);
+
   const rows = useMemo<InputRow[]>(() => {
     const panelIds = new Set(categoryPanels.map((p) => p.panelId));
     return tests
@@ -199,9 +249,12 @@ export default function CategoryInputsPage() {
 
   const filteredRows = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
-    if (!query) return rows;
     return rows.filter((row) => {
       const status = row.active ? "active" : "hidden";
+      if (inputStatusFilter && status !== inputStatusFilter) return false;
+      if (inputPanelFilter && row.panelId !== inputPanelFilter) return false;
+      if (inputTypeFilter && row.resultType !== inputTypeFilter) return false;
+      if (!query) return true;
       return [
         row.panelName,
         row.displayName,
@@ -216,7 +269,38 @@ export default function CategoryInputsPage() {
         .toLowerCase()
         .includes(query);
     });
-  }, [rows, tableSearch]);
+  }, [rows, tableSearch, inputStatusFilter, inputPanelFilter, inputTypeFilter]);
+
+  const sortedRows = useMemo(() => {
+    return [...filteredRows].sort((left, right) => {
+      let comparison = 0;
+      if (inputSortBy === "panel") {
+        comparison = left.panelName.localeCompare(right.panelName);
+      } else if (inputSortBy === "type") {
+        comparison = left.resultType.localeCompare(right.resultType);
+      } else if (inputSortBy === "status") {
+        const leftStatus = left.active ? "active" : "hidden";
+        const rightStatus = right.active ? "active" : "hidden";
+        comparison = leftStatus.localeCompare(rightStatus);
+      } else {
+        comparison = left.displayName.localeCompare(right.displayName);
+      }
+      return inputSortOrder === "asc" ? comparison : -comparison;
+    });
+  }, [filteredRows, inputSortBy, inputSortOrder]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (inputPage - 1) * inputPageSize;
+    return sortedRows.slice(start, start + inputPageSize);
+  }, [sortedRows, inputPage, inputPageSize]);
+
+  useEffect(() => {
+    setPanelPage(1);
+  }, [panelSearch, panelStatusFilter, panelSortBy, panelSortOrder]);
+
+  useEffect(() => {
+    setInputPage(1);
+  }, [tableSearch, inputStatusFilter, inputPanelFilter, inputTypeFilter, inputSortBy, inputSortOrder]);
 
   const handlePanelsExport = () => {
     exportRowsToExcel({
@@ -527,12 +611,33 @@ export default function CategoryInputsPage() {
             <>
               <DataTableToolbar
                 showSearch={false}
-                searchValue=""
-                onSearchChange={() => {}}
-                searchPlaceholder="Panels"
+                searchValue={panelSearch}
+                onSearchChange={setPanelSearch}
+                searchPlaceholder="Search panels..."
                 onExport={handlePanelsExport}
-                exportDisabled={!categoryPanels.length}
-              />
+                exportDisabled={!sortedPanels.length}
+              >
+                <NativeSelect
+                  value={panelStatusFilter}
+                  onChange={(e) => setPanelStatusFilter(e.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="hidden">Hidden</option>
+                </NativeSelect>
+                <NativeSelect value={panelSortBy} onChange={(e) => setPanelSortBy(e.target.value)}>
+                  <option value="name">Sort by name</option>
+                  <option value="order">Sort by order</option>
+                  <option value="status">Sort by status</option>
+                </NativeSelect>
+                <NativeSelect
+                  value={panelSortOrder}
+                  onChange={(e) => setPanelSortOrder(e.target.value)}
+                >
+                  <option value="asc">A-Z first</option>
+                  <option value="desc">Z-A first</option>
+                </NativeSelect>
+              </DataTableToolbar>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -544,7 +649,14 @@ export default function CategoryInputsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {categoryPanels.map((panel) => (
+                  {sortedPanels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No panels match your filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {paginatedPanels.map((panel) => (
                     <TableRow key={panel.panelId}>
                       <TableCell className="font-medium">{panel.name}</TableCell>
                       <TableCell>{panel.ordering}</TableCell>
@@ -586,6 +698,18 @@ export default function CategoryInputsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <DataPagination
+                page={panelPage}
+                pageSize={panelPageSize}
+                totalItems={sortedPanels.length}
+                pageSizeOptions={[5, 10, 20, 50]}
+                itemLabel="panels"
+                onPageChange={setPanelPage}
+                onPageSizeChange={(value) => {
+                  setPanelPageSize(value);
+                  setPanelPage(1);
+                }}
+              />
             </>
           )}
         </CardContent>
@@ -618,8 +742,51 @@ export default function CategoryInputsPage() {
                 onSearchChange={setTableSearch}
                 searchPlaceholder="Search inputs..."
                 onExport={handleInputsExport}
-                exportDisabled={!filteredRows.length}
-              />
+                exportDisabled={!sortedRows.length}
+              >
+                <NativeSelect
+                  value={inputPanelFilter}
+                  onChange={(e) => setInputPanelFilter(e.target.value)}
+                >
+                  <option value="">All panels</option>
+                  {categoryPanels.map((panel) => (
+                    <option key={panel.panelId} value={panel.panelId}>
+                      {panel.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  value={inputTypeFilter}
+                  onChange={(e) => setInputTypeFilter(e.target.value)}
+                >
+                  <option value="">All types</option>
+                  <option value="number">Number</option>
+                  <option value="text">Text</option>
+                  <option value="select">Select</option>
+                  <option value="boolean">Boolean</option>
+                </NativeSelect>
+                <NativeSelect
+                  value={inputStatusFilter}
+                  onChange={(e) => setInputStatusFilter(e.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="hidden">Hidden</option>
+                </NativeSelect>
+                <NativeSelect value={inputSortBy} onChange={(e) => setInputSortBy(e.target.value)}>
+                  <option value="displayName">Sort by input name</option>
+                  <option value="panel">Sort by panel</option>
+                  <option value="type">Sort by type</option>
+                  <option value="status">Sort by status</option>
+                </NativeSelect>
+                <NativeSelect
+                  value={inputSortOrder}
+                  onChange={(e) => setInputSortOrder(e.target.value)}
+                >
+                  <option value="asc">A-Z first</option>
+                  <option value="desc">Z-A first</option>
+                </NativeSelect>
+              </DataTableToolbar>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -635,14 +802,14 @@ export default function CategoryInputsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.length === 0 ? (
+                  {sortedRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center text-muted-foreground">
-                        No inputs match your search.
+                        No inputs match your filters.
                       </TableCell>
                     </TableRow>
                   ) : null}
-                  {filteredRows.map((row) => (
+                  {paginatedRows.map((row) => (
                     <TableRow key={row.testId}>
                       <TableCell>{row.panelName}</TableCell>
                       <TableCell className="font-medium">{row.displayName}</TableCell>
@@ -688,6 +855,18 @@ export default function CategoryInputsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <DataPagination
+                page={inputPage}
+                pageSize={inputPageSize}
+                totalItems={sortedRows.length}
+                pageSizeOptions={[5, 10, 20, 50]}
+                itemLabel="inputs"
+                onPageChange={setInputPage}
+                onPageSizeChange={(value) => {
+                  setInputPageSize(value);
+                  setInputPage(1);
+                }}
+              />
             </>
           )}
         </CardContent>
@@ -733,26 +912,26 @@ export default function CategoryInputsPage() {
                 <p className="text-sm text-destructive">{panelErrors.ordering}</p>
               ) : null}
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="panel-print-empty"
                 checked={panelDialog.printIfEmpty}
-                onChange={(e) =>
-                  setPanelDialog((prev) => ({ ...prev, printIfEmpty: e.target.checked }))
+                onCheckedChange={(checked) =>
+                  setPanelDialog((prev) => ({ ...prev, printIfEmpty: checked === true }))
                 }
               />
-              Print even when empty
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Label htmlFor="panel-print-empty">Print even when empty</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="panel-active"
                 checked={panelDialog.active}
-                onChange={(e) =>
-                  setPanelDialog((prev) => ({ ...prev, active: e.target.checked }))
+                onCheckedChange={(checked) =>
+                  setPanelDialog((prev) => ({ ...prev, active: checked === true }))
                 }
               />
-              Active
-            </label>
+              <Label htmlFor="panel-active">Active</Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPanelDialog((prev) => ({ ...prev, open: false }))}>
@@ -777,14 +956,10 @@ export default function CategoryInputsPage() {
           <div className="space-y-3">
             <div className="space-y-2">
               <Label>Panel</Label>
-              <select
+              <NativeSelect
                 value={inputDialog.panelId}
                 onChange={(e) => setInputDialog((p) => ({ ...p, panelId: e.target.value }))}
-                className={`h-10 w-full rounded-md border bg-slate-50/90 px-3 text-sm shadow-sm dark:bg-slate-900/40 ${
-                  inputErrors.panelId
-                    ? "border-destructive"
-                    : "border-slate-300/80 dark:border-slate-700/70"
-                }`}
+                className={inputErrors.panelId ? "border-destructive" : undefined}
                 disabled={inputDialog.mode === "edit"}
               >
                 <option value="">Select panel</option>
@@ -793,7 +968,7 @@ export default function CategoryInputsPage() {
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {inputErrors.panelId ? (
                 <p className="text-sm text-destructive">{inputErrors.panelId}</p>
               ) : null}
@@ -813,7 +988,7 @@ export default function CategoryInputsPage() {
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
-              <select
+              <NativeSelect
                 value={inputDialog.resultType}
                 onChange={(e) =>
                   setInputDialog((p) => ({
@@ -821,13 +996,12 @@ export default function CategoryInputsPage() {
                     resultType: e.target.value as LabTest["resultType"],
                   }))
                 }
-                className="h-10 w-full rounded-md border border-slate-300/80 bg-slate-50/90 px-3 text-sm shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40"
               >
                 <option value="number">number</option>
                 <option value="text">text</option>
                 <option value="select">select</option>
                 <option value="boolean">boolean</option>
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
@@ -869,16 +1043,16 @@ export default function CategoryInputsPage() {
                 />
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="input-active"
                 checked={inputDialog.active}
-                onChange={(e) =>
-                  setInputDialog((p) => ({ ...p, active: e.target.checked }))
+                onCheckedChange={(checked) =>
+                  setInputDialog((p) => ({ ...p, active: checked === true }))
                 }
               />
-              Active
-            </label>
+              <Label htmlFor="input-active">Active</Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInputDialog((p) => ({ ...p, open: false }))}>

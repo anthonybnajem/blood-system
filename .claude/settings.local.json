@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(ls /Users/anthony/work/blood-system/app/\\\\\\(dashboard\\\\\\)/employees/)",
+      "Bash(ls /Users/anthony/work/blood-system/app/\\\\\\(dashboard\\\\\\)/customers/)",
+      "Bash(grep:*)",
+      "Bash(node:*)",
+      "Bash(find /Users/anthony/work/blood-system/scripts -name *.mjs -o -name *.ts)"
+    ]
+  }
+}

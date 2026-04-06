@@ -569,7 +569,7 @@ function ensureDemoCatalogSeed() {
 
   const catalog = [
     {
-      department: "Biochemistry",
+      department: "Biochimie",
       panels: [
         {
           name: "Metabolic Panel",
@@ -603,7 +603,7 @@ function ensureDemoCatalogSeed() {
       ],
     },
     {
-      department: "Endocrinology",
+      department: "Endocrine",
       panels: [
         {
           name: "Thyroid Panel",
