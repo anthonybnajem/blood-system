@@ -9,7 +9,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { exportRowsToExcel } from "@/lib/excel-export";
+import { exportWorkbookToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type Visit = {
@@ -23,6 +23,44 @@ type Visit = {
   visitDate: string;
   status: "draft" | "ready" | "verified" | "printed";
   updatedAt: string;
+};
+
+type PrintableLabReport = {
+  visitId: string;
+  caseNo: string;
+  visitDate: string;
+  physicianName?: string | null;
+  branch?: string | null;
+  patient: {
+    patientId: string;
+    fullName: string;
+    gender: string;
+    dateOfBirth?: string | null;
+    phone?: string | null;
+    location?: string | null;
+  };
+  printMeta: {
+    printCount: number;
+    printedAt?: string | null;
+  };
+  departments: Array<{
+    departmentId: string;
+    department: string;
+    panels: Array<{
+      panelId: string;
+      name: string;
+      tests: Array<{
+        testId: string;
+        code: string;
+        displayName: string;
+        value: string;
+        unit: string;
+        rangeText: string;
+        lastResult: string | null;
+        abnormalFlag: string | null;
+      }>;
+    }>;
+  }>;
 };
 
 function formatDateTime(value: string) {
@@ -47,6 +85,7 @@ export default function OverviewReportsPage() {
   const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -84,21 +123,74 @@ export default function OverviewReportsPage() {
     return reports.slice(start, start + pageSize);
   }, [reports, page, pageSize]);
 
-  const handleExport = () => {
-    exportRowsToExcel({
-      fileName: `reports-overview-${new Date().toISOString().slice(0, 10)}`,
-      sheetName: "Reports",
-      rows: reports.map((report) => ({
-        Patient: report.patientName,
-        PatientID: report.patientId,
-        CaseNo: report.caseNo,
-        Reference: report.physicianName || report.branch || "",
-        VisitDate: formatDateTime(report.visitDate),
-        Status: report.status,
-        ReportCount: report.patientReportCount,
-        VisitID: report.visitId,
-      })),
-    });
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const detailedReports = await Promise.all(
+        reports.map(async (report) => {
+          const response = await fetch(`/api/lab/reports/${encodeURIComponent(report.visitId)}`, {
+            cache: "no-store",
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(body?.error || `Failed to load report ${report.caseNo}`);
+          }
+          return body.data as PrintableLabReport;
+        })
+      );
+
+      exportWorkbookToExcel({
+        fileName: `reports-overview-${new Date().toISOString().slice(0, 10)}`,
+        sheets: [
+          {
+            sheetName: "Reports Summary",
+            rows: reports.map((report) => ({
+              Patient: report.patientName,
+              PatientID: report.patientId,
+              CaseNo: report.caseNo,
+              Reference: report.physicianName || report.branch || "",
+              VisitDate: formatDateTime(report.visitDate),
+              Status: report.status,
+              ReportCount: report.patientReportCount,
+              VisitID: report.visitId,
+              UpdatedAt: formatDateTime(report.updatedAt),
+            })),
+          },
+          {
+            sheetName: "Report Details",
+            rows: detailedReports.flatMap((report) =>
+              report.departments.flatMap((department) =>
+                department.panels.flatMap((panel) =>
+                  panel.tests.map((test) => ({
+                    Patient: report.patient.fullName,
+                    PatientID: report.patient.patientId,
+                    CaseNo: report.caseNo,
+                    VisitID: report.visitId,
+                    VisitDate: formatDateTime(report.visitDate),
+                    Reference: report.physicianName || report.branch || "",
+                    Department: department.department,
+                    Panel: panel.name,
+                    Test: test.displayName,
+                    Code: test.code,
+                    Value: test.value,
+                    Unit: test.unit,
+                    Range: test.rangeText,
+                    LastResult: test.lastResult || "",
+                    Flag: test.abnormalFlag || "",
+                    PrintCount: report.printMeta.printCount,
+                    PrintedAt: report.printMeta.printedAt
+                      ? formatDateTime(report.printMeta.printedAt)
+                      : "",
+                  }))
+                )
+              )
+            ),
+          },
+        ],
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -113,8 +205,9 @@ export default function OverviewReportsPage() {
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search reports..."
-          onExport={handleExport}
-          exportDisabled={!reports.length}
+          onExport={() => void handleExport()}
+          exportLabel={isExporting ? "Exporting..." : "Export Excel"}
+          exportDisabled={!reports.length || isExporting}
         >
           <NativeSelect
             value={status}

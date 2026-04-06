@@ -22,6 +22,12 @@ let updateState = {
   progressPercent: null,
 };
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
 function broadcastUpdateState() {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send("electron:update-state", updateState);
@@ -315,25 +321,47 @@ async function startBundledServer() {
 }
 
 function stopBundledServer() {
-  if (nextServerProcess && !nextServerProcess.killed) {
-    if (process.platform === "win32" && nextServerProcess.pid) {
+  return new Promise((resolve) => {
+    if (!nextServerProcess || nextServerProcess.killed) {
+      nextServerProcess = null;
+      resolve();
+      return;
+    }
+
+    const processToStop = nextServerProcess;
+    nextServerProcess = null;
+
+    const finish = () => resolve();
+
+    if (process.platform === "win32" && processToStop.pid) {
       try {
-        const killer = spawn("taskkill", ["/pid", String(nextServerProcess.pid), "/t", "/f"], {
+        const killer = spawn("taskkill", ["/pid", String(processToStop.pid), "/t", "/f"], {
           stdio: "ignore",
         });
-        killer.unref();
+        killer.once("exit", finish);
+        killer.once("error", () => {
+          try {
+            processToStop.kill();
+          } catch (_killError) {}
+          finish();
+        });
+        return;
       } catch (_error) {
         try {
-          nextServerProcess.kill();
+          processToStop.kill();
         } catch (_killError) {}
+        finish();
+        return;
       }
-    } else {
-      try {
-        nextServerProcess.kill("SIGKILL");
-      } catch (_error) {}
     }
-  }
-  nextServerProcess = null;
+
+    try {
+      processToStop.once("exit", finish);
+      processToStop.kill("SIGKILL");
+    } catch (_error) {
+      finish();
+    }
+  });
 }
 
 function escapeHtmlAttribute(value) {
@@ -540,10 +568,10 @@ ipcMain.handle("electron:download-update", async () => {
 
   return updateState;
 });
-ipcMain.handle("electron:quit-and-install-update", () => {
+ipcMain.handle("electron:quit-and-install-update", async () => {
   initializeUpdater();
   if (updateState.status === "downloaded") {
-    stopBundledServer();
+    await stopBundledServer();
     autoUpdater.quitAndInstall(true, true);
     return true;
   }
@@ -582,6 +610,10 @@ ipcMain.handle("electron:launch-uninstaller", async () => {
 });
 
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) {
+    return;
+  }
+
   try {
     initializeUpdater();
     let resolvedStartUrl = externalStartUrl || startUrlFromPort;
@@ -604,13 +636,27 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("window-all-closed", () => {
-  stopBundledServer();
-  if (process.platform !== "darwin") {
-    app.quit();
+app.on("second-instance", () => {
+  const [existingWindow] = BrowserWindow.getAllWindows();
+  if (!existingWindow) {
+    return;
   }
+
+  if (existingWindow.isMinimized()) {
+    existingWindow.restore();
+  }
+
+  existingWindow.focus();
+});
+
+app.on("window-all-closed", () => {
+  void stopBundledServer().finally(() => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
 });
 
 app.on("before-quit", () => {
-  stopBundledServer();
+  void stopBundledServer();
 });

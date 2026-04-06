@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Clock3, FileText, Loader2, Printer, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, Download, FileText, Loader2, Printer, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataPagination } from "@/components/ui/data-pagination";
@@ -100,6 +100,7 @@ export default function LabEntryPatientPage() {
   const [activityPage, setActivityPage] = useState(1);
   const [activityPageSize, setActivityPageSize] = useState(5);
   const [refreshingTables, setRefreshingTables] = useState(false);
+  const [exportingPatient, setExportingPatient] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -267,6 +268,49 @@ export default function LabEntryPatientPage() {
     }
   };
 
+  const exportPatientPackage = async () => {
+    if (!patientId || !patient) return;
+
+    setExportingPatient(true);
+    try {
+      const response = await fetch(`/api/lab/patients/${encodeURIComponent(patientId)}/export`, {
+        method: "GET",
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to export patient package");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      const fileName =
+        disposition?.match(/filename="(.+)"/)?.[1] ||
+        `${patient.fullName}-${patient.patientId}.zip`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Patient export ready",
+        description: `Downloaded the full export package for ${patient.fullName}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Export failed",
+        description: error?.message || "Could not export patient package.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingPatient(false);
+    }
+  };
+
   const renderActionLabel = (action: ReportActivityItem["action"]) => {
     if (action === "create") return "Created";
     if (action === "update") return "Updated";
@@ -287,19 +331,34 @@ export default function LabEntryPatientPage() {
           </Link>
         </Button>
 
-        <Button
-          type="button"
-          disabled={!patient}
-          onClick={() => {
-            if (!patient) return;
-            router.push(
-              `/lab-entry/patients/${encodeURIComponent(patient.patientId)}/quick-report`
-            );
-          }}
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          Create New Report
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!patient || exportingPatient}
+            onClick={() => void exportPatientPackage()}
+          >
+            {exportingPatient ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Export Patient Package
+          </Button>
+          <Button
+            type="button"
+            disabled={!patient}
+            onClick={() => {
+              if (!patient) return;
+              router.push(
+                `/lab-entry/patients/${encodeURIComponent(patient.patientId)}/quick-report`
+              );
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Create New Report
+          </Button>
+        </div>
       </div>
 
       <div>

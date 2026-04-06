@@ -2214,6 +2214,77 @@ export async function exportLabSystemArchive() {
   };
 }
 
+export async function exportPatientArchive(patientId: string) {
+  const patient = getPatientById(patientId);
+  if (!patient) {
+    throw new Error("Patient not found");
+  }
+
+  const reports = listVisitsByPatient(patientId, 1000);
+  const activity = listPatientReportActivity(patientId, 1000);
+  const detailedReports = reports.map((report) => getPrintableLabReport(report.visitId));
+
+  const zip = new JSZip();
+  const patientFolderName = `${sanitizeFileSegment(patient.fullName)}__${sanitizeFileSegment(patient.patientId)}`;
+  const root = zip.folder(patientFolderName);
+  if (!root) {
+    throw new Error("Could not create patient export archive");
+  }
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([patient]), "Patient");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(reports), "Reports");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(activity), "Activity");
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.json_to_sheet(
+      detailedReports.flatMap((report) =>
+        report.departments.flatMap((department) =>
+          department.panels.flatMap((panel) =>
+            panel.tests.map((test) => ({
+              Patient: report.patient.fullName,
+              PatientID: report.patient.patientId,
+              CaseNo: report.caseNo,
+              VisitID: report.visitId,
+              VisitDate: report.visitDate,
+              Department: department.department,
+              Panel: panel.name,
+              Test: test.displayName,
+              Code: test.code,
+              Value: test.value,
+              Unit: test.unit,
+              Range: test.rangeText,
+              LastResult: test.lastResult || "",
+              Flag: test.abnormalFlag || "",
+            }))
+          )
+        )
+      )
+    ),
+    "Report Details"
+  );
+
+  root.file("patient-summary.json", JSON.stringify(patient, null, 2));
+  root.file("reports-summary.json", JSON.stringify(reports, null, 2));
+  root.file("reports-activity.json", JSON.stringify(activity, null, 2));
+  root.file("patient-export.xlsx", XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+
+  const reportsFolder = root.folder("reports");
+  for (const report of detailedReports) {
+    const reportFolder = reportsFolder?.folder(
+      `${sanitizeFileSegment(report.caseNo)}__${sanitizeFileSegment(report.visitId)}`
+    );
+    if (!reportFolder) continue;
+    reportFolder.file("report.json", JSON.stringify(report, null, 2));
+    reportFolder.file("printable-report.html", buildPrintableReportHtml(report));
+  }
+
+  return {
+    fileName: `${patientFolderName}.zip`,
+    bytes: await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+  };
+}
+
 export function importLabSystemData(payload: LabSystemExport) {
   if (!payload || payload.version !== LAB_SYSTEM_EXPORT_VERSION) {
     throw new Error("Invalid blood system export file.");

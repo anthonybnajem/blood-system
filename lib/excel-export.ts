@@ -13,8 +13,23 @@ export function exportRowsToExcel(options: {
   sheetName: string;
   rows: Array<Record<string, unknown>>;
 }) {
-  const worksheet = XLSX.utils.json_to_sheet(options.rows);
   const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(options.rows);
   XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(options.sheetName));
+  XLSX.writeFile(workbook, `${sanitizeFileName(options.fileName)}.xlsx`);
+}
+
+export function exportWorkbookToExcel(options: {
+  fileName: string;
+  sheets: Array<{
+    sheetName: string;
+    rows: Array<Record<string, unknown>>;
+  }>;
+}) {
+  const workbook = XLSX.utils.book_new();
+  for (const sheet of options.sheets) {
+    const worksheet = XLSX.utils.json_to_sheet(sheet.rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeSheetName(sheet.sheetName));
+  }
   XLSX.writeFile(workbook, `${sanitizeFileName(options.fileName)}.xlsx`);
 }

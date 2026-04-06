@@ -8,15 +8,30 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { exportRowsToExcel } from "@/lib/excel-export";
+import { exportWorkbookToExcel } from "@/lib/excel-export";
 import { Loader2 } from "lucide-react";
 
 type Patient = {
   patientId: string;
   fullName: string;
+  dateOfBirth?: string | null;
   gender: string;
   phone?: string | null;
   location?: string | null;
+  createdAt?: string;
+  updatedAt: string;
+};
+
+type VisitHistoryItem = {
+  visitId: string;
+  caseNo: string;
+  physicianName?: string | null;
+  branch?: string | null;
+  visitDate: string;
+  status: string;
+  resultCount: number;
+  printCount: number;
+  printedAt?: string | null;
   updatedAt: string;
 };
 
@@ -41,6 +56,7 @@ export default function OverviewPatientsPage() {
   const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -77,19 +93,65 @@ export default function OverviewPatientsPage() {
     return patients.slice(start, start + pageSize);
   }, [patients, page, pageSize]);
 
-  const handleExport = () => {
-    exportRowsToExcel({
-      fileName: `patients-overview-${new Date().toISOString().slice(0, 10)}`,
-      sheetName: "Patients",
-      rows: patients.map((patient) => ({
-        Name: patient.fullName,
-        Gender: patient.gender,
-        Phone: patient.phone || "",
-        Location: patient.location || "",
-        Updated: formatDateTime(patient.updatedAt),
-        PatientID: patient.patientId,
-      })),
-    });
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const patientReports = await Promise.all(
+        patients.map(async (patient) => {
+          const response = await fetch(
+            `/api/lab/visits?patientId=${encodeURIComponent(patient.patientId)}&limit=100`,
+            { cache: "no-store" }
+          );
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(body?.error || `Failed to load reports for ${patient.fullName}`);
+          }
+          return {
+            patient,
+            reports: (body.data || []) as VisitHistoryItem[],
+          };
+        })
+      );
+
+      exportWorkbookToExcel({
+        fileName: `patients-overview-${new Date().toISOString().slice(0, 10)}`,
+        sheets: [
+          {
+            sheetName: "Patients",
+            rows: patients.map((patient) => ({
+              Name: patient.fullName,
+              PatientID: patient.patientId,
+              Gender: patient.gender,
+              DateOfBirth: patient.dateOfBirth || "",
+              Phone: patient.phone || "",
+              Location: patient.location || "",
+              CreatedAt: patient.createdAt ? formatDateTime(patient.createdAt) : "",
+              UpdatedAt: formatDateTime(patient.updatedAt),
+            })),
+          },
+          {
+            sheetName: "Report Summaries",
+            rows: patientReports.flatMap(({ patient, reports }) =>
+              reports.map((report) => ({
+                Patient: patient.fullName,
+                PatientID: patient.patientId,
+                CaseNo: report.caseNo,
+                VisitID: report.visitId,
+                VisitDate: formatDateTime(report.visitDate),
+                Status: report.status,
+                Reference: report.physicianName || report.branch || "",
+                ResultCount: report.resultCount,
+                PrintCount: report.printCount,
+                PrintedAt: report.printedAt ? formatDateTime(report.printedAt) : "",
+                UpdatedAt: formatDateTime(report.updatedAt),
+              }))
+            ),
+          },
+        ],
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -104,8 +166,9 @@ export default function OverviewPatientsPage() {
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search patients..."
-          onExport={handleExport}
-          exportDisabled={!patients.length}
+          onExport={() => void handleExport()}
+          exportLabel={isExporting ? "Exporting..." : "Export Excel"}
+          exportDisabled={!patients.length || isExporting}
         >
           <NativeSelect
             value={sortBy}
