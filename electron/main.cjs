@@ -316,7 +316,22 @@ async function startBundledServer() {
 
 function stopBundledServer() {
   if (nextServerProcess && !nextServerProcess.killed) {
-    nextServerProcess.kill("SIGTERM");
+    if (process.platform === "win32" && nextServerProcess.pid) {
+      try {
+        const killer = spawn("taskkill", ["/pid", String(nextServerProcess.pid), "/t", "/f"], {
+          stdio: "ignore",
+        });
+        killer.unref();
+      } catch (_error) {
+        try {
+          nextServerProcess.kill();
+        } catch (_killError) {}
+      }
+    } else {
+      try {
+        nextServerProcess.kill("SIGKILL");
+      } catch (_error) {}
+    }
   }
   nextServerProcess = null;
 }
@@ -528,6 +543,7 @@ ipcMain.handle("electron:download-update", async () => {
 ipcMain.handle("electron:quit-and-install-update", () => {
   initializeUpdater();
   if (updateState.status === "downloaded") {
+    stopBundledServer();
     autoUpdater.quitAndInstall(true, true);
     return true;
   }
