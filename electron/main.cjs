@@ -12,6 +12,7 @@ const startUrlFromPort = `http://127.0.0.1:${port}`;
 let nextServerProcess = null;
 let stopBundledServerPromise = null;
 let isAwaitingBundledServerShutdown = false;
+let isInstallingUpdate = false;
 let updaterInitialized = false;
 let updateState = {
   supported: false,
@@ -762,10 +763,12 @@ ipcMain.handle("electron:download-update", async () => {
 ipcMain.handle("electron:quit-and-install-update", async () => {
   initializeUpdater();
   if (updateState.status === "downloaded") {
+    isInstallingUpdate = true;
     traceDesktop("quit-and-install-requested", {
       version: updateState.downloadedVersion || updateState.availableVersion,
     });
     await stopBundledServer();
+    traceDesktop("quit-and-install-start");
     autoUpdater.quitAndInstall(true, true);
     return true;
   }
@@ -859,7 +862,12 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => {
-  traceDesktop("window-all-closed");
+  traceDesktop("window-all-closed", {
+    isInstallingUpdate,
+  });
+  if (isInstallingUpdate) {
+    return;
+  }
   void stopBundledServer().finally(() => {
     if (process.platform !== "darwin") {
       app.quit();
@@ -870,7 +878,11 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   traceDesktop("before-quit", {
     awaitingShutdown: isAwaitingBundledServerShutdown,
+    isInstallingUpdate,
   });
+  if (isInstallingUpdate) {
+    return;
+  }
   if (isAwaitingBundledServerShutdown) {
     return;
   }
@@ -881,6 +893,11 @@ app.on("before-quit", (event) => {
     traceDesktop("before-quit-resume");
     app.quit();
   });
+});
+
+app.on("before-quit-for-update", () => {
+  isInstallingUpdate = true;
+  traceDesktop("before-quit-for-update");
 });
 
 app.on("will-quit", () => {
