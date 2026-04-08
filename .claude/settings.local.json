@@ -6,7 +6,8 @@
       "Bash(ls /Users/anthony/work/blood-system/app/\\\\\\(dashboard\\\\\\)/customers/)",
       "Bash(grep:*)",
       "Bash(node:*)",
-      "Bash(find /Users/anthony/work/blood-system/scripts -name *.mjs -o -name *.ts)"
+      "Bash(find /Users/anthony/work/blood-system/scripts -name *.mjs -o -name *.ts)",
+      "Bash(find /Users/anthony/work/blood-system -name *.nsh -o -name installer.nsi -o -name *.nsi)"
     ]
   }
 }

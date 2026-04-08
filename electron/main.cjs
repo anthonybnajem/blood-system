@@ -10,6 +10,8 @@ const isDev = process.env.ELECTRON_DEV === "1";
 const externalStartUrl = process.env.ELECTRON_START_URL || "";
 const startUrlFromPort = `http://127.0.0.1:${port}`;
 let nextServerProcess = null;
+let stopBundledServerPromise = null;
+let isAwaitingBundledServerShutdown = false;
 let updaterInitialized = false;
 let updateState = {
   supported: false,
@@ -28,6 +30,55 @@ if (!hasSingleInstanceLock) {
   app.quit();
 }
 
+function serializeForLog(value) {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+
+  if (value && typeof value === "object") {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_error) {
+      return String(value);
+    }
+  }
+
+  return value;
+}
+
+function getDesktopLogPath() {
+  try {
+    const logDir = path.join(app.getPath("userData"), "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    return path.join(logDir, "desktop-main.log");
+  } catch (_error) {
+    return path.join(process.cwd(), "desktop-main.log");
+  }
+}
+
+function traceDesktop(event, details) {
+  const payload =
+    details === undefined ? undefined : serializeForLog(details);
+  const line = `[${new Date().toISOString()}] ${event}${
+    payload === undefined ? "" : ` ${JSON.stringify(payload)}`
+  }\n`;
+
+  try {
+    fs.appendFileSync(getDesktopLogPath(), line, "utf8");
+  } catch (_error) {}
+
+  if (payload === undefined) {
+    console.log(`[desktop] ${event}`);
+    return;
+  }
+
+  console.log(`[desktop] ${event}`, payload);
+}
+
 function broadcastUpdateState() {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send("electron:update-state", updateState);
@@ -39,6 +90,7 @@ function setUpdateState(patch) {
     ...updateState,
     ...patch,
   };
+  traceDesktop("update-state", updateState);
   broadcastUpdateState();
 }
 
@@ -299,6 +351,10 @@ async function startBundledServer() {
     cwd: bundledAppDir,
     env: runtimeEnv,
   });
+  traceDesktop("bundled-server-setup-complete", {
+    port,
+    bundledAppDir,
+  });
 
   nextServerProcess = spawn(process.execPath, [serverEntry], {
     cwd: bundledAppDir,
@@ -309,8 +365,13 @@ async function startBundledServer() {
     },
     stdio: "inherit",
   });
+  traceDesktop("bundled-server-spawned", {
+    pid: nextServerProcess.pid,
+    serverEntry,
+  });
 
   nextServerProcess.once("exit", (code) => {
+    traceDesktop("bundled-server-exit", { code });
     if (code && code !== 0) {
       console.error(`Bundled Next server exited with code ${code}`);
     }
@@ -321,8 +382,14 @@ async function startBundledServer() {
 }
 
 function stopBundledServer() {
-  return new Promise((resolve) => {
+  if (stopBundledServerPromise) {
+    traceDesktop("bundled-server-stop-reused");
+    return stopBundledServerPromise;
+  }
+
+  stopBundledServerPromise = new Promise((resolve) => {
     if (!nextServerProcess || nextServerProcess.killed) {
+      traceDesktop("bundled-server-stop-skipped");
       nextServerProcess = null;
       resolve();
       return;
@@ -330,38 +397,89 @@ function stopBundledServer() {
 
     const processToStop = nextServerProcess;
     nextServerProcess = null;
+    traceDesktop("bundled-server-stop-start", {
+      pid: processToStop.pid,
+      platform: process.platform,
+    });
 
-    const finish = () => resolve();
+    let finished = false;
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      traceDesktop("bundled-server-stop-finished", {
+        pid: processToStop.pid,
+      });
+      resolve();
+    };
 
     if (process.platform === "win32" && processToStop.pid) {
       try {
         const killer = spawn("taskkill", ["/pid", String(processToStop.pid), "/t", "/f"], {
           stdio: "ignore",
         });
+        traceDesktop("bundled-server-stop-taskkill", {
+          pid: processToStop.pid,
+          killerPid: killer.pid,
+        });
         killer.once("exit", finish);
         killer.once("error", () => {
+          traceDesktop("bundled-server-stop-taskkill-error", {
+            pid: processToStop.pid,
+          });
           try {
             processToStop.kill();
           } catch (_killError) {}
           finish();
         });
-        return;
       } catch (_error) {
+        traceDesktop("bundled-server-stop-taskkill-spawn-failed", {
+          pid: processToStop.pid,
+        });
         try {
           processToStop.kill();
         } catch (_killError) {}
         finish();
-        return;
+      }
+    } else {
+      try {
+        processToStop.once("exit", finish);
+        processToStop.kill("SIGKILL");
+      } catch (_error) {
+        finish();
       }
     }
-
-    try {
-      processToStop.once("exit", finish);
-      processToStop.kill("SIGKILL");
-    } catch (_error) {
-      finish();
-    }
+  }).finally(() => {
+    traceDesktop("bundled-server-stop-promise-cleared");
+    stopBundledServerPromise = null;
   });
+
+  return stopBundledServerPromise;
+}
+
+function scheduleWindowsUninstaller(uninstallPath) {
+  const escapedPath = uninstallPath.replace(/"/g, '""');
+  const launcher = spawn(
+    "cmd",
+    [
+      "/d",
+      "/s",
+      "/c",
+      `ping 127.0.0.1 -n 2 > nul && start "" "${escapedPath}"`,
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    }
+  );
+  launcher.unref();
+  traceDesktop("uninstaller-launcher-spawned", {
+    launcherPid: launcher.pid,
+    uninstallPath,
+  });
+  return true;
 }
 
 function escapeHtmlAttribute(value) {
@@ -571,6 +689,9 @@ ipcMain.handle("electron:download-update", async () => {
 ipcMain.handle("electron:quit-and-install-update", async () => {
   initializeUpdater();
   if (updateState.status === "downloaded") {
+    traceDesktop("quit-and-install-requested", {
+      version: updateState.downloadedVersion || updateState.availableVersion,
+    });
     await stopBundledServer();
     autoUpdater.quitAndInstall(true, true);
     return true;
@@ -589,22 +710,30 @@ ipcMain.handle("electron:get-uninstall-info", () => {
 });
 ipcMain.handle("electron:launch-uninstaller", async () => {
   if (process.platform !== "win32" || !app.isPackaged) {
+    traceDesktop("uninstaller-launch-unsupported", {
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+    });
     return false;
   }
 
   const uninstallPath = findWindowsUninstallerPath();
   if (uninstallPath) {
-    const child = spawn(uninstallPath, [], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
+    traceDesktop("uninstaller-launch-requested", { uninstallPath });
+    await stopBundledServer();
+    scheduleWindowsUninstaller(uninstallPath);
+    isAwaitingBundledServerShutdown = true;
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.close();
+    }
     setTimeout(() => {
+      traceDesktop("app-quit-for-uninstall");
       app.quit();
-    }, 250);
+    }, 100);
     return true;
   }
 
+  traceDesktop("uninstaller-not-found-opening-settings");
   await shell.openExternal("ms-settings:appsfeatures");
   return true;
 });
@@ -615,6 +744,11 @@ app.whenReady().then(async () => {
   }
 
   try {
+    traceDesktop("app-ready", {
+      version: app.getVersion(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+    });
     initializeUpdater();
     let resolvedStartUrl = externalStartUrl || startUrlFromPort;
     if (app.isPackaged && !externalStartUrl) {
@@ -629,6 +763,7 @@ app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
+    traceDesktop("app-activate");
     if (BrowserWindow.getAllWindows().length === 0) {
       const fallbackUrl = externalStartUrl || startUrlFromPort;
       createWindow(fallbackUrl);
@@ -637,6 +772,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("second-instance", () => {
+  traceDesktop("app-second-instance");
   const [existingWindow] = BrowserWindow.getAllWindows();
   if (!existingWindow) {
     return;
@@ -650,6 +786,7 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => {
+  traceDesktop("window-all-closed");
   void stopBundledServer().finally(() => {
     if (process.platform !== "darwin") {
       app.quit();
@@ -657,6 +794,34 @@ app.on("window-all-closed", () => {
   });
 });
 
-app.on("before-quit", () => {
-  void stopBundledServer();
+app.on("before-quit", (event) => {
+  traceDesktop("before-quit", {
+    awaitingShutdown: isAwaitingBundledServerShutdown,
+  });
+  if (isAwaitingBundledServerShutdown) {
+    return;
+  }
+
+  event.preventDefault();
+  isAwaitingBundledServerShutdown = true;
+  void stopBundledServer().finally(() => {
+    traceDesktop("before-quit-resume");
+    app.quit();
+  });
+});
+
+app.on("will-quit", () => {
+  traceDesktop("will-quit");
+});
+
+app.on("quit", (_event, exitCode) => {
+  traceDesktop("quit", { exitCode });
+});
+
+process.on("uncaughtException", (error) => {
+  traceDesktop("uncaught-exception", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  traceDesktop("unhandled-rejection", reason);
 });

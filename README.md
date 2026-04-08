@@ -90,6 +90,21 @@ Windows auto-update notes:
 - In the desktop app, open `Settings -> General -> Desktop Updates` to check, download, and install updates from GitHub.
 - `bash scripts/release-update.sh` defaults to a patch release, must be run on `main`, stages all current changes, commits, tags, and pushes in one command.
 
+Windows uninstall/update troubleshooting:
+
+- The packaged desktop runtime writes lifecycle logs to `%APPDATA%/Blood System/logs/desktop-main.log`.
+- For uninstall failures like `Failed to uninstall old application files ... : 2`, check the latest log entries and confirm this order:
+  - `uninstaller-launch-requested`
+  - `bundled-server-stop-start`
+  - `bundled-server-stop-finished`
+  - `uninstaller-launcher-spawned`
+  - `app-quit-for-uninstall`
+  - `before-quit`
+  - `will-quit`
+  - `quit`
+- If the app is still installed after a failed upgrade, close all `Blood System`, `electron`, and `node` processes in Task Manager before rerunning the installer.
+- The bundled SQLite data lives under the Electron user-data folder, not the install directory, so reinstalling should preserve application data.
+
 Files added for Electron runtime:
 
 - `electron/main.cjs`
