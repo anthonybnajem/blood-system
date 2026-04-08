@@ -1,7 +1,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
@@ -105,38 +105,6 @@ function markUpdateAsDownloaded(version) {
   });
 }
 
-function getRuntimeUpdateFeedUrl() {
-  const rawUrl = process.env.AUTO_UPDATE_URL || process.env.DESKTOP_UPDATE_URL;
-  if (!rawUrl) {
-    return "";
-  }
-
-  return rawUrl.trim().replace(/\/+$/, "");
-}
-
-function getRuntimeGitHubRepo() {
-  const rawRepo = process.env.GITHUB_UPDATER_REPOSITORY || process.env.GITHUB_REPOSITORY;
-  if (!rawRepo) {
-    return null;
-  }
-
-  const [owner, repo] = rawRepo.trim().split("/", 2);
-  if (!owner || !repo) {
-    return null;
-  }
-
-  return { owner, repo };
-}
-
-function getGitHubReleaseBaseUrl(owner, repo, version) {
-  const normalizedVersion = String(version || "").trim().replace(/^v/i, "");
-  if (!owner || !repo || !normalizedVersion) {
-    return null;
-  }
-
-  return `https://github.com/${owner}/${repo}/releases/download/v${normalizedVersion}`;
-}
-
 function hasBundledUpdateConfig() {
   return fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
 }
@@ -157,50 +125,26 @@ function initializeUpdater() {
     return;
   }
 
-  const runtimeFeedUrl = getRuntimeUpdateFeedUrl();
-  const runtimeGitHubRepo = getRuntimeGitHubRepo();
   const bundledConfigExists = hasBundledUpdateConfig();
 
-  if (!bundledConfigExists && !runtimeFeedUrl && !runtimeGitHubRepo) {
+  traceDesktop("updater-config-detected", {
+    bundledConfigExists,
+    updateConfigPath: path.join(process.resourcesPath, "app-update.yml"),
+  });
+
+  if (!bundledConfigExists) {
     setUpdateState({
       supported: true,
       configured: false,
       status: "unavailable",
-      message: "No GitHub release or direct update feed is configured for this build.",
+      message: "This packaged build is missing app-update.yml, so desktop updates are unavailable.",
     });
     return;
   }
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-
-  if (runtimeFeedUrl) {
-    autoUpdater.setFeedURL({
-      provider: "generic",
-      url: runtimeFeedUrl,
-    });
-  } else if (runtimeGitHubRepo) {
-    autoUpdater.setFeedURL({
-      provider: "github",
-      owner: runtimeGitHubRepo.owner,
-      repo: runtimeGitHubRepo.repo,
-      releaseType: "release",
-    });
-
-    if (process.platform === "win32") {
-      const previousBlockmapBaseUrl = getGitHubReleaseBaseUrl(
-        runtimeGitHubRepo.owner,
-        runtimeGitHubRepo.repo,
-        app.getVersion()
-      );
-
-      if (previousBlockmapBaseUrl) {
-        autoUpdater.previousBlockmapBaseUrlOverride = previousBlockmapBaseUrl;
-      }
-
-      autoUpdater.disableWebInstaller = true;
-    }
-  }
+  autoUpdater.disableWebInstaller = process.platform === "win32";
 
   autoUpdater.on("checking-for-update", () => {
     setUpdateState({
@@ -253,7 +197,7 @@ function initializeUpdater() {
   autoUpdater.on("error", (error) => {
     setUpdateState({
       supported: true,
-      configured: bundledConfigExists || Boolean(runtimeFeedUrl) || Boolean(runtimeGitHubRepo),
+      configured: bundledConfigExists,
       status: "error",
       message: error?.message || "The updater failed.",
       progressPercent: null,
@@ -264,7 +208,7 @@ function initializeUpdater() {
     supported: true,
     configured: true,
     status: "idle",
-    message: "Ready to check for updates.",
+    message: "Ready to check for updates from the packaged release feed.",
   });
 }
 
@@ -527,9 +471,138 @@ function findWindowsUninstallerPath() {
       return path.join(installDir, matched);
     }
   } catch (_error) {
+    // Fall through to registry lookup.
+  }
+
+  const registryPath = findWindowsUninstallerPathFromRegistry(installDir);
+  if (registryPath) {
+    return registryPath;
+  }
+
+  return null;
+}
+
+function parseExecutablePath(command) {
+  const raw = String(command || "").trim();
+  if (!raw) {
     return null;
   }
 
+  if (raw.startsWith('"')) {
+    const endQuote = raw.indexOf('"', 1);
+    if (endQuote > 1) {
+      return raw.slice(1, endQuote);
+    }
+  }
+
+  const exeIndex = raw.toLowerCase().indexOf(".exe");
+  if (exeIndex !== -1) {
+    return raw.slice(0, exeIndex + 4).trim();
+  }
+
+  return null;
+}
+
+function findWindowsUninstallerPathFromRegistry(installDir) {
+  const registryRoots = [
+    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+  ];
+  const normalizedInstallDir = installDir.toLowerCase();
+  const candidateNames = new Set(
+    [app.getName(), "Blood System", "lab-system-zgharta"].map((value) =>
+      String(value || "").trim().toLowerCase()
+    )
+  );
+
+  for (const root of registryRoots) {
+    const result = spawnSync("reg", ["query", root, "/s"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+
+    if (result.status !== 0 || !result.stdout) {
+      traceDesktop("uninstaller-registry-query-failed", {
+        root,
+        status: result.status,
+        stderr: result.stderr || "",
+      });
+      continue;
+    }
+
+    const lines = result.stdout.split(/\r?\n/);
+    let currentKey = "";
+    let displayName = "";
+    let uninstallString = "";
+    let installLocation = "";
+
+    const flush = () => {
+      const executablePath = parseExecutablePath(uninstallString);
+      if (!executablePath) {
+        return null;
+      }
+
+      const normalizedExecutablePath = executablePath.toLowerCase();
+      const normalizedLocation = installLocation.toLowerCase();
+      const displayNameMatches =
+        displayName && candidateNames.has(displayName.toLowerCase());
+      const installLocationMatches =
+        normalizedLocation && normalizedLocation === normalizedInstallDir;
+      const uninstallPathMatches = normalizedExecutablePath.startsWith(normalizedInstallDir);
+
+      if (displayNameMatches || installLocationMatches || uninstallPathMatches) {
+        traceDesktop("uninstaller-registry-match", {
+          currentKey,
+          displayName,
+          installLocation,
+          executablePath,
+        });
+        return executablePath;
+      }
+
+      return null;
+    };
+
+    for (const line of lines) {
+      if (!line.trim()) {
+        const match = flush();
+        if (match) {
+          return match;
+        }
+        currentKey = "";
+        displayName = "";
+        uninstallString = "";
+        installLocation = "";
+        continue;
+      }
+
+      if (/^HKEY_/i.test(line)) {
+        currentKey = line.trim();
+        continue;
+      }
+
+      const valueMatch = line.match(/^\s+([^\s]+)\s+REG_\w+\s+(.*)$/);
+      if (!valueMatch) {
+        continue;
+      }
+
+      const [, name, value] = valueMatch;
+      if (name === "DisplayName") {
+        displayName = value.trim();
+      } else if (name === "UninstallString") {
+        uninstallString = value.trim();
+      } else if (name === "InstallLocation") {
+        installLocation = value.trim();
+      }
+    }
+
+    const lastMatch = flush();
+    if (lastMatch) {
+      return lastMatch;
+    }
+  }
+
+  traceDesktop("uninstaller-registry-no-match", { installDir });
   return null;
 }
 

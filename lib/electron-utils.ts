@@ -188,6 +188,23 @@ export const downloadDesktopUpdate = async (): Promise<DesktopUpdateState> => {
   return window.electronAPI.downloadUpdate();
 };
 
+export const triggerDesktopUpdateCheck = async (): Promise<DesktopUpdateState> => {
+  if (typeof window === "undefined" || !window.electronAPI) {
+    return DEFAULT_UPDATE_STATE;
+  }
+
+  try {
+    const state = await window.electronAPI.checkForUpdates();
+    return {
+      ...state,
+      currentVersion: state.currentVersion || getAppVersion(),
+    };
+  } catch (error) {
+    console.error("Failed to check desktop updates:", error);
+    return DEFAULT_UPDATE_STATE;
+  }
+};
+
 export const installDesktopUpdate = async (): Promise<boolean> => {
   if (typeof window === "undefined" || !window.electronAPI) {
     return false;

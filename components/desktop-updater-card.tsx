@@ -11,6 +11,7 @@ import {
   installDesktopUpdate,
   isElectron,
   subscribeToDesktopUpdateState,
+  triggerDesktopUpdateCheck,
   type DesktopUpdateState,
 } from "@/lib/electron-utils";
 
@@ -40,6 +41,16 @@ export function DesktopUpdaterCard() {
   const [state, setState] = useState<DesktopUpdateState>(EMPTY_UPDATE_STATE);
   const [isChecking, setIsChecking] = useState(false);
 
+  const runUpdateCheck = async () => {
+    setIsChecking(true);
+    try {
+      const nextState = await triggerDesktopUpdateCheck();
+      setState(nextState);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   useEffect(() => {
     if (!isElectron()) {
       return;
@@ -53,6 +64,8 @@ export function DesktopUpdaterCard() {
         setState(value);
       }
     });
+
+    void runUpdateCheck();
 
     const unsubscribe = subscribeToDesktopUpdateState((value) => {
       setState(value);
@@ -72,17 +85,7 @@ export function DesktopUpdaterCard() {
   }
 
   const handleCheck = async () => {
-    if (!window.electronAPI) {
-      return;
-    }
-
-    setIsChecking(true);
-    try {
-      const nextState = await window.electronAPI.checkForUpdates();
-      setState(nextState);
-    } finally {
-      setIsChecking(false);
-    }
+    await runUpdateCheck();
   };
 
   const handleInstall = async () => {

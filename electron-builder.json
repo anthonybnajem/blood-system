@@ -5,6 +5,7 @@
     "app": "dist/desktop",
     "output": "dist/release"
   },
+  "electronUpdaterCompatibility": ">=2.16",
   "files": [
     "**/*"
   ],
