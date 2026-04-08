@@ -41,6 +41,7 @@ build_local_installers() {
   echo "  - $desktop_dir/$(basename "$mac_artifact")"
 }
 
+
 if [[ $# -gt 1 ]]; then
   usage
 fi
